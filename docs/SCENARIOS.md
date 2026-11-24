@@ -148,13 +148,30 @@ The decision lineage in [`ambiguous.REPORT.md`](../examples/runs/ambiguous.REPOR
 
 ---
 
-## 4. Recovery behaviour (fault injection)
+## 4. AI-assisted: API keys for link creation (optional, `--llm`)
+
+`scenarios/ai-assisted` asks that only callers with a valid API key may create links. The catalog knows this capability (`api_key_auth`, task `T-apikey`) but has **no reviewed recipe** for it, so the task can only be done by a human or a model.
+
+| | Without a model | With `--llm` |
+|---|---|---|
+| `implement:T-apikey` | `implementation` fails (no recipe) → `FALLBACK_INVOKED` → `implementation-llm` is *unavailable* → stage `FAILED` | `implementation` fails (no recipe) → `implementation-llm` is given the task, acceptance criteria and current code, and returns a change set |
+| Guardrails | — | Reply validated (only `create`/`patch` of `.java` under `src/main` or `src/test`). Policy engine on the preview; a hard-coded key would be CRITICAL and blocked before writing. |
+| Outcome | Run `FAILED`, **workspace rolled back to baseline** | **AI-001 (HIGH) → run pauses at `implement:T-apikey/code-review`.** The reviewer reads the diff and `runs/<id>/ai/T-apikey-a1.md` (exact prompt + reply), then approves or rejects. After approval: build/test, security scan and release readiness as usual. |
+
+```bash
+./agentic run scenarios/ai-assisted                      # no model: fails cleanly, rolls back
+./agentic run scenarios/ai-assisted --llm --run-id ai-1  # needs ANTHROPIC_API_KEY; pauses for code review
+./agentic resume ai-1 --interactive
+```
+
+## 5. Recovery behaviour (fault injection)
 
 | Demo | Command | What happens |
 |---|---|---|
 | Transient faults | `--fault implement:T-expiry-store:transient:2 --fault codebase_analysis:transient:1` | 3 retries with backoff (200 ms, then 400 ms). The run succeeds and the metrics record MTTR. Report: [`recovery-retry.REPORT.md`](../examples/runs/recovery-retry.REPORT.md) |
 | Broken change | `--fault implement:T-expiry-api:corrupt` | The implementation "succeeds" but leaves a compile error. `build_test` exit gate `tests-green=FAIL (compilation failed)`, so the run is `FAILED`. **The workspace is restored to baseline** and the implementation stages are marked `ROLLED_BACK`. Report: [`recovery-rollback.REPORT.md`](../examples/runs/recovery-rollback.REPORT.md) |
 | Invalid LLM output | (test) a fake model proposes the capability `teleportation` | Validation rejects it, the fallback rules agent produces the requirements, and the run succeeds (`ScenarioEndToEndTest`). |
+| Invalid model-written code | (test) the model's patch does not match the code, or it targets `build.gradle` | Nothing is written. The attempt fails as transient and the retry prompt says what was wrong (`LlmImplementationAgentTest`). |
 | Critical policy violation | (test) a change containing a hard-coded secret | `SAFE_STOPPED` before anything is accepted, with rollback (`OrchestratorTest`). |
 | Operator kill switch | `./agentic stop <run-id>` | `SAFE_STOPPED`, drain, rollback. |
 | Process crash | (test) state left `RUNNING` with a half-written file | `resume --recover` undoes the interrupted attempt from its persisted undo log and finishes. |

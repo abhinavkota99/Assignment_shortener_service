@@ -1,0 +1,7 @@
+{
+  "id": "brownfield-api-keys-ai-assisted",
+  "title": "Brownfield, AI-assisted: API keys for link creation (no approved recipe)",
+  "type": "brownfield",
+  "baseline": "shortener-service",
+  "requirement": "Security wants link creation locked down. Only callers presenting a valid API key may create short links: a POST to create a link without a valid key must return 401 Unauthorized. Redirects, metadata and analytics stay public."
+}
