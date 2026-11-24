@@ -13,3 +13,5 @@ shortener-service/data/
 .idea/
 *.iml
 .vscode/
+# macOS
+.DS_Store
