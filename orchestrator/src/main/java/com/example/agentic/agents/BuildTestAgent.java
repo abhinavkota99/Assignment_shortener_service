@@ -90,7 +90,12 @@ public final class BuildTestAgent implements Agent {
             Path usedLog = log;
             int exit;
             if (docker) {
-                DockerSandbox sb = new DockerSandbox(DockerSandbox.Config.fromEnv(System.getenv(), project));
+                DockerSandbox sb;
+                try {
+                    sb = new DockerSandbox(DockerSandbox.Config.fromEnv(System.getenv(), project));
+                } catch (IllegalArgumentException e) {
+                    throw AgentException.permanent("sandbox configuration rejected: " + e.getMessage());
+                }
                 report.set("isolation", Json.tree(sb.describe()));
                 DockerSandbox.Exec ex = sandboxed(ctx, sb, project, out, report);
                 exit = ex.exitCode();

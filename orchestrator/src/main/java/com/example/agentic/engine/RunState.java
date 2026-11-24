@@ -35,6 +35,25 @@ public final class RunState {
     Map<String, Integer> counters = new LinkedHashMap<>();
     int resumes;
 
+    private static final java.util.regex.Pattern RUN_ID = java.util.regex.Pattern.compile("[A-Za-z0-9][A-Za-z0-9._-]{0,99}");
+
+    /**
+     * The directory of a run, refusing ids that are not a single plain name. A run id like
+     * {@code ../../x} would otherwise make the orchestrator write, restore and roll back files outside
+     * the runs directory.
+     */
+    public static Path dirOf(Path runsDir, String runId) {
+        if (runId == null || !RUN_ID.matcher(runId).matches() || runId.contains("..")) {
+            throw new IllegalArgumentException("invalid run id '" + runId
+                    + "': use letters, digits, '.', '_' and '-' only (max 100 characters, no '..')");
+        }
+        Path dir = runsDir.resolve(runId).normalize();
+        if (!dir.getParent().equals(runsDir.normalize())) {
+            throw new IllegalArgumentException("invalid run id '" + runId + "'");
+        }
+        return dir;
+    }
+
     public static RunState load(Path runDir) {
         return Json.read(runDir.resolve("state.json"), RunState.class);
     }

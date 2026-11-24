@@ -113,7 +113,7 @@ public final class Orchestrator {
     // == public API ===============================================================================
 
     public RunState start(Scenario scenario, String runId) {
-        Path runDir = runsDir.resolve(runId);
+        Path runDir = RunState.dirOf(runsDir, runId);
         if (Files.exists(runDir.resolve("state.json"))) {
             throw new IllegalStateException("run " + runId + " already exists; use resume");
         }
@@ -162,7 +162,7 @@ public final class Orchestrator {
      * persisted undo logs and rescheduled.
      */
     public RunState resume(String runId, Path answersFile, boolean recoverCrashed) {
-        Path runDir = runsDir.resolve(runId);
+        Path runDir = RunState.dirOf(runsDir, runId);
         RunState state = RunState.load(runDir);
         boolean crashed = state.status == RunStatus.RUNNING;
         if (!state.status.resumable() && !(crashed && recoverCrashed)) {

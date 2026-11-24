@@ -72,13 +72,13 @@ public final class AgenticCli {
                     return summary(st, runs, out);
                 }
                 case "status" -> {
-                    RunState st = RunState.load(runs.resolve(o.positional(1)));
+                    RunState st = RunState.load(RunState.dirOf(runs, o.positional(1)));
                     out.println(st.runId() + " " + st.status() + (st.stopReason() == null ? "" : " - " + st.stopReason()));
                     st.stages().forEach((id, r) -> out.printf("  %-30s %-18s attempts=%d%n", id, r.status(), r.attempts()));
                     return 0;
                 }
                 case "verify-audit" -> {
-                    AuditLog.Verification v = AuditLog.verify(runs.resolve(o.positional(1)).resolve("audit.jsonl"));
+                    AuditLog.Verification v = AuditLog.verify(RunState.dirOf(runs, o.positional(1)).resolve("audit.jsonl"));
                     out.println((v.valid() ? "VALID" : "INVALID") + ": " + v.entries() + " entries, " + v.detail());
                     return v.valid() ? 0 : 1;
                 }
@@ -87,7 +87,7 @@ public final class AgenticCli {
                     return 0;
                 }
                 case "stop" -> {
-                    Path stop = runs.resolve(o.positional(1)).resolve("STOP");
+                    Path stop = RunState.dirOf(runs, o.positional(1)).resolve("STOP");
                     Files.writeString(stop, "stop requested at " + java.time.Instant.now() + "\n");
                     out.println("kill switch engaged: " + stop);
                     return 0;

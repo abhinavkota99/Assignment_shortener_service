@@ -44,6 +44,26 @@ final class DockerSandbox {
     /** Settings, all overridable through environment variables. */
     record Config(String image, Path cache, String memory, String cpus, String pids, String user) {
 
+        /** Values end up as separate {@code docker run} arguments: reject anything that could be read as an option. */
+        Config {
+            check("AGENTIC_SANDBOX_IMAGE", image, "[A-Za-z0-9][A-Za-z0-9._/:@-]{0,254}");
+            check("AGENTIC_SANDBOX_MEMORY", memory, "[0-9]{1,6}[bkmgBKMG]?");
+            check("AGENTIC_SANDBOX_CPUS", cpus, "[0-9]{1,3}(\\.[0-9]{1,2})?");
+            check("AGENTIC_SANDBOX_PIDS", pids, "[0-9]{1,6}");
+            if (user != null) {
+                check("sandbox user", user, "[0-9]{1,10}:[0-9]{1,10}");
+            }
+            if (cache.toString().contains(":")) {
+                throw new IllegalArgumentException("AGENTIC_SANDBOX_CACHE must not contain ':' (it is used in a volume mount)");
+            }
+        }
+
+        private static void check(String name, String value, String pattern) {
+            if (value == null || !value.matches(pattern)) {
+                throw new IllegalArgumentException(name + " has an invalid value: '" + value + "'");
+            }
+        }
+
         static Config fromEnv(Map<String, String> env, Path project) {
             String home = System.getProperty("user.home");
             return new Config(
