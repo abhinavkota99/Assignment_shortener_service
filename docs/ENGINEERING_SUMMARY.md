@@ -94,10 +94,12 @@ The order of work was:
   * MockMvc contract tests: status codes, headers, every error mapping (400/404/405/409/413/415/429), request-id handling.
   * Journal: restart, torn tail, corruption, future format version (Jackson 3).
   * Full Spring Boot context on a random port: create, redirect, restart with data intact, Actuator liveness/readiness, metrics, uniform errors.
-* **Orchestrator:** 47 tests.
-  * Pure components (29): graph cycles and re-expansion; policy rules; audit tamper detection (modify, delete, reorder); workspace atomicity, undo, path escape, OS-metadata and binary-file handling; approval gateway separation of duties; LLM output validation; Gradle report parsing and credential stripping.
+* **Orchestrator:** 58 tests.
+  * Pure components (40): graph cycles and re-expansion; policy rules; audit tamper detection (modify, delete, reorder); workspace atomicity, undo, path escape, OS-metadata and binary-file handling; approval gateway separation of duties; LLM output validation; model-written change sets (the model sees current code, writes are limited to Java sources, retry with feedback, secrets blocked before writing, the AI-001 review is always raised, transcript recorded); Docker sandbox commands (lock-down flags, network only in the prepare phase, read-only cache in the test phase); Gradle report parsing and credential stripping.
   * Engine with stub agents (13 tests): prove that branches run *concurrently* (a barrier that only releases if both run), and cover retry/bounded retry, fallback, rollback, safe-stop, pause/resume, rejection, invalidation, crash recovery and the kill switch.
   * End-to-end (5): all three real scenarios, each generating a Spring Boot workspace and building it with Gradle, plus the LLM seam with fake models (valid output used, invalid output falls back).
+* **Docker sandbox, run for real:** `BuildTestAgent` with `AGENTIC_SANDBOX=docker` built and tested a probe project in two containers. Its tests asserted, from inside the test phase, that the network is unreachable, the dependency cache is read-only and host secrets such as `ANTHROPIC_API_KEY` and proxy variables are not visible. All passed. A compile error was reported with correct workspace-relative paths.
+* **Model-written code through the engine:** the `ai-assisted` scenario was run with a stub model. The task with no recipe fell back to `implementation-llm`, and the run paused at `implement:T-apikey/code-review`. Without a model, the same run fails at that task and rolls back to the baseline.
 * **Independent check of the output:** the brownfield `CHANGE.patch` was applied to a clean copy of the module with `git apply`, and the module's real Gradle build passed all 46 tests.
 * **Bugs found by validation and fixed in the engine:**
   * A traceability gap: capabilities delivered by tasks owned by other capabilities.
@@ -120,12 +122,13 @@ The order of work was:
 
 ## 7. Limitations (honest list)
 
-1. **Code generation is not LLM-driven.** In this submission, implementation agents replay *reviewed* change sets: greenfield copies from the reference implementation, brownfield applies patches. The pipeline around them is real: preview, policy, atomic apply with undo, compile, test, scan, approval, release. An LLM code generator is a new recipe source behind the same `ImplementationAgent` contract. It was not built because its output could not be made reproducible or verified here.
+1. **Model-written code is optional and secondary.** By default, implementation agents replay *reviewed* change sets: greenfield copies from the reference implementation, brownfield applies patches. This keeps every committed run reproducible. With `--llm`, a model implements tasks that have no recipe (or whose recipe no longer applies). It runs behind the same pipeline and always requires a human code review. It is unit-tested and engine-tested with stub models but was **not exercised against the live API** here. Its output quality depends on the model and is non-deterministic by nature, which is why review is mandatory.
 2. **Requirement understanding is catalog-driven.** Keyword and pattern matching against known capabilities and ambiguity patterns. The optional LLM classifier (`--llm`, needs `ANTHROPIC_API_KEY`) is unit-tested with fake models but was **not exercised against the live API**, because the build environment had no network access.
-3. **Two build environments.** The service is Spring Boot 4.0.8 and needs Maven Central. The orchestrator is plain Java + Jackson 2 + JUnit 4, because it was developed in a sandbox without Maven Central access and verified there offline (`-PofflineLibs`, `-PskipE2E`). The Spring service and the end-to-end scenario tests were built and verified on a networked developer machine. A follow-up would move the orchestrator to JUnit 5 for consistency.
-4. Orchestrator scale: one process, file-based state, no distributed locking, no multi-tenancy, and timeouts are cooperative for in-process agents.
-5. Policy rules are regex-based heuristics, not a full SAST tool. In a real pipeline they complement Snyk/CodeQL rather than replace them.
-6. The service is single-node (see the §4 trade-offs).
+3. **Docker sandbox scope.** The prepare phase needs network access to fetch Gradle and dependencies, so the build script runs online. That is acceptable because build files are change-controlled (CHG-002) and the model cannot write them. The sandbox was verified with a probe project and a locally built JDK image. The full Spring Boot workspace in Docker still has to be run on a networked machine. The default stays `process`, so nothing depends on Docker.
+4. **Two build environments.** The service is Spring Boot 4.0.8 and needs Maven Central. The orchestrator is plain Java + Jackson 2 + JUnit 4, because it was developed in a sandbox without Maven Central access and verified there offline (`-PofflineLibs`, `-PskipE2E`). The Spring service and the end-to-end scenario tests were built and verified on a networked developer machine. A follow-up would move the orchestrator to JUnit 5 for consistency.
+5. Orchestrator scale: one process, file-based state, no distributed locking, no multi-tenancy, and timeouts are cooperative for in-process agents.
+6. Policy rules are regex-based heuristics, not a full SAST tool. In a real pipeline they complement Snyk/CodeQL rather than replace them.
+7. The service is single-node (see the §4 trade-offs).
 
 ## 8. Mapping to the brief
 

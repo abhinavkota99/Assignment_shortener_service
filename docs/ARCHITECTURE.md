@@ -178,6 +178,7 @@ The ambiguous scenario exercises all of this. The answers arrive and the require
 | CMP-002 plan task tagged `personal-data` | HIGH → `privacy-review` *before any code exists* | plan |
 | CHG-002 build/CI files, CHG-003 dependency changes, QA-001 deleting tests, CHG-006 blast radius (>15 files or >600 lines per change set) | HIGH → `change-control` | change set, plan |
 | CHG-004 breaking API change | HIGH → `design-review` | plan |
+| AI-001 change written by a model | HIGH → `code-review`, **always** | every model-written change set |
 
 HIGH findings always require approval, whatever the workflow configuration says. Configuration cannot switch governance off.
 
@@ -187,6 +188,7 @@ HIGH findings always require approval, whatever the workflow configuration says.
 |---|---|---|
 | `design/design-review` | design changes the API contract or the stored-data format | output review (agent proposes, human accepts) |
 | `<stage>/privacy-review`, `security-review`, `change-control` | a HIGH policy finding on that stage's output | output review |
+| `implement:<task>/code-review` | the task's change was written by a model (AI-001) | output review, with the exact prompt and reply in `runs/<id>/ai/` |
 | `release/release` | always | **pre-action approval**: the release agent does not run until a human approves |
 
 * Approval keys are `<stage>/<checkpoint>`, and `*/<checkpoint>` acts as a wildcard.
@@ -236,14 +238,40 @@ HIGH findings always require approval, whatever the workflow configuration says.
 | `codebase-analysis` | workspace | `codebase_index` | Types, type-level reference graph (both directions), test count, routes, capabilities already present (catalog evidence). |
 | `planner` | requirements, index, `human.constraints` | `plan` | Reuse vs build vs exclude. Pulls in prerequisites, serialises shared files, groups tasks into waves. Plan-level policy. |
 | `design` | plan, index, requirements | `design` | API and data changes, impacted files, ripple types (existing code referencing changed types), risks. Requests `design-review`. |
-| `implementation` | plan task, design | `impl.<task>` + workspace change | Recipe → change set → preview → policy → atomic apply with undo log. |
-| `build-test` | workspace | `test_report` | Copies the workspace, builds and tests it with the repository's pinned Gradle wrapper in a separate process (timeout, credential-like environment variables removed), parses the JUnit XML. Network/dependency failures are transient; compile errors and failing tests are not. |
+| `implementation` → fallback `implementation-llm` | plan task, design | `impl.<task>` + workspace change | Recipe → change set → preview → policy → atomic apply with undo log. If the task has no approved recipe, or its recipe no longer applies, the model-backed fallback takes over (see below). |
+| `build-test` | workspace | `test_report` | Copies the workspace, builds and tests it with the repository's pinned Gradle wrapper, then parses the JUnit XML. By default this runs as a separate host process (timeout, credential-like environment variables removed). With `AGENTIC_SANDBOX=docker` it runs in a locked-down container instead (see below). Network/dependency failures are transient; compile errors and failing tests are not. |
 | `security-scan` | workspace diff | `security_report` | Independent scan of the complete code diff (`src/`), separate from the per-task checks. |
 | `docs` | requirements, plan, design, source | `docs/API.md`, `docs/changes/<scenario>.md` | Generated from the source of truth. |
 | `release-readiness` | everything | `release_readiness` | Checklist, requirement → task → test traceability, diff, risks. |
 | `release` | readiness | `release/CHANGE.patch`, `MANIFEST.json` | Only after human approval. Never pushes. |
 
-**Where an LLM fits.** `LlmClient` is the seam. In the default offline mode, requirement classification falls back to the rules agent, and implementation replays *reviewed recipes*: change sets stored as data in `knowledge/recipes`. An LLM code generator would be another recipe source behind the same pipeline (preview → policy → apply → gates → approval). The governance around agents does not depend on how a proposal was produced. That is the property this design optimises for.
+**Where an LLM fits.** `LlmClient` is the seam. In the default offline mode, requirement classification falls back to the rules agent, and implementation replays *reviewed recipes*: change sets stored as data in `knowledge/recipes`. With `--llm`, a model is used in two places, and in both it is an untrusted contributor:
+
+* `requirements-llm` classifies the requirement against the catalog (known ids only).
+* `implementation-llm` writes code for a task that has no approved recipe, or whose recipe no longer applies.
+  * **Context:** it is given the task, the acceptance criteria and the *current* contents of the code (files the task names first, then `build.gradle`, then sources, within a size budget).
+  * **Output:** it must reply with the same change-set format as a recipe: `create` a new file or `patch` an exact snippet that occurs once. It cannot delete files, and it can only write `.java` files under `src/main/java/` and `src/test/java/`. Build files, configuration, CI and the wrapper are out of reach.
+  * **Validation:** an invalid reply, or a patch that does not match the code, is a transient failure. The retry prompt says what was wrong (bounded by `maxAttempts`).
+  * **Pipeline:** the change then takes the same path as any other: preview → policy (secrets, personal data, blast radius) → atomic apply with undo log → build/test/scan gates.
+  * **Review:** every model-written change raises **AI-001 (HIGH) → `code-review`**. A policy finding cannot be configured away, so model-written code is never accepted without a named human approving it.
+  * **Audit:** the exact prompt and raw reply are stored per attempt in `runs/<id>/ai/<task>-a<n>.md`, and the prompt's SHA-256 is recorded in the `impl.<task>` artifact.
+
+The governance around agents does not depend on how a proposal was produced. That is the property this design optimises for.
+
+**Docker build sandbox.** With `AGENTIC_SANDBOX=docker` (or `auto`), `build-test` runs Gradle in a container in two phases:
+
+1. **prepare**, network on: the wrapper fetches Gradle, and dependencies are resolved and the code compiled into a host cache shared between runs. This executes the build script, which agents can only change through change control. It compiles application code but does not run it.
+2. **test**, `--network none`: `--offline test`, with the dependency cache and the Gradle distribution mounted **read-only** (`GRADLE_RO_DEP_CACHE`) and Gradle's home on a throw-away tmpfs. Code under test cannot reach the network, and it cannot poison the cache that later runs use.
+
+Both phases run with:
+* a read-only root filesystem;
+* `--cap-drop ALL` and `no-new-privileges`;
+* memory, CPU and PID limits;
+* the operator's uid;
+* no host environment variables;
+* no shell: Gradle is started with `java -jar`.
+
+If the container exceeds the timeout it is force-removed. `docker` mode fails when Docker is unavailable instead of silently falling back to the weaker process mode. The applied isolation is recorded in `test_report.isolation`.
 
 ## 10. The URL shortener service
 

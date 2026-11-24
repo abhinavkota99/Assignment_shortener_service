@@ -18,9 +18,10 @@ import java.util.List;
  * Implements one plan task as a change set against the workspace.
  *
  * <p>Change sets come from the task's recipe: {@code reference} copies reviewed files from the
- * reference implementation (greenfield), {@code changeset} applies reviewed edits (brownfield). An
- * LLM code generator would plug in here as another recipe source; whatever the source, the change set
- * goes through the same pipeline: preview, policy evaluation, atomic application with undo log.
+ * reference implementation (greenfield), {@code changeset} applies reviewed edits (brownfield). A task
+ * with no approved recipe, or whose recipe no longer applies, fails here and the workflow hands it to
+ * {@link LlmImplementationAgent} when a model is configured. Whatever the source, the change set goes
+ * through the same pipeline: preview, policy evaluation, atomic application with undo log.
  */
 public final class ImplementationAgent implements Agent {
 
@@ -118,7 +119,7 @@ public final class ImplementationAgent implements Agent {
                 }
             }
             default -> throw AgentException.permanent("task " + task.path("id").asText() + " has no approved recipe ('" + type
-                    + "'): it needs a human implementation or an LLM-backed code generator");
+                    + "'): it needs a human implementation or the model-backed fallback (--llm)");
         }
         if (ops.isEmpty()) {
             throw AgentException.permanent("empty change set for task " + task.path("id").asText());

@@ -38,15 +38,20 @@ public final class AnthropicLlmClient implements LlmClient {
 
     @Override
     public String complete(String system, String user) throws IOException, InterruptedException {
+        return complete(system, user, 2000);
+    }
+
+    @Override
+    public String complete(String system, String user, int maxTokens) throws IOException, InterruptedException {
         ObjectNode body = Json.object();
         body.put("model", model);
-        body.put("max_tokens", 2000);
+        body.put("max_tokens", maxTokens);
         body.put("system", system);
         ObjectNode msg = body.putArray("messages").addObject();
         msg.put("role", "user");
         msg.put("content", user);
         HttpRequest req = HttpRequest.newBuilder(ENDPOINT)
-                .timeout(Duration.ofSeconds(60))
+                .timeout(Duration.ofSeconds(maxTokens > 4000 ? 300 : 60))
                 .header("content-type", "application/json")
                 .header("x-api-key", apiKey)
                 .header("anthropic-version", "2023-06-01")

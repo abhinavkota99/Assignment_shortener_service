@@ -36,6 +36,7 @@ public final class AgentRegistry {
                 .register(new PlanningAgent())
                 .register(new DesignAgent())
                 .register(new ImplementationAgent())
+                .register(new LlmImplementationAgent())
                 .register(new BuildTestAgent())
                 .register(new SecurityScanAgent())
                 .register(new DocsAgent())

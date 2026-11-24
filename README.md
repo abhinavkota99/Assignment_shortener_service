@@ -16,13 +16,19 @@ The orchestrator has three scenarios:
 - **Greenfield:** it builds the shortener into an empty workspace.
 - **Brownfield:** it adds link expiration to the existing code.
 - **Ambiguous:** given "make it safer and give marketing better insight", it stops to ask, then re-plans around a privacy rejection.
+- **AI-assisted (optional):** API keys for link creation. No reviewed recipe exists for this task, so a model writes the change. The model is shown the current code, its output is validated and policy-checked, and the run **always stops for a human code review** before the change is accepted.
+
+Two optional hardening features are both off by default, so the default build and demo stay deterministic and need nothing beyond a JDK:
+
+- **Model-written code** (`--llm` + `ANTHROPIC_API_KEY`): the fallback when a task has no approved recipe or its recipe no longer applies.
+- **Docker build sandbox** (`AGENTIC_SANDBOX=docker`): runs the workspace build and tests in a locked-down container. Tests run with **no network**.
 
 ## Quick start
 
 Prerequisites: **JDK 17+** (`JAVA_HOME` set) and **git**. The Gradle wrapper downloads Gradle, and the first build downloads Spring Boot from Maven Central.
 
 ```bash
-./gradlew build                      # both modules, 96 tests (includes all 3 scenarios end to end)
+./gradlew build                      # both modules, 107 tests (includes all 3 scenarios end to end)
 
 # Greenfield: build the service from an empty workspace (approvals recorded in a file)
 ./agentic run scenarios/greenfield --approvals scenarios/greenfield/approvals.json
@@ -73,6 +79,26 @@ results without running anything.
 ./agentic stop <run-id>
 ```
 
+### Optional: model-written code and the Docker sandbox
+
+```bash
+# Without a model the AI-assisted scenario fails cleanly at the task that has no recipe, and rolls back
+./agentic run scenarios/ai-assisted
+
+# With a model: the model implements T-apikey, and the run pauses for code review (AI-001, always HIGH)
+export ANTHROPIC_API_KEY=...            # never committed; never visible to the code under test
+./agentic run scenarios/ai-assisted --llm --run-id ai-1
+cat runs/ai-1/APPROVALS-PENDING.md      # what needs review
+cat runs/ai-1/ai/T-apikey-a1.md         # exact prompt and raw model reply, for the reviewer and the audit
+./agentic resume ai-1 --interactive     # approve or reject after reading the diff in runs/ai-1/workspace
+
+# Build and test in a locked-down container (needs Docker; pulls eclipse-temurin:17-jdk)
+AGENTIC_SANDBOX=docker ./agentic run scenarios/brownfield --approvals scenarios/brownfield/approvals.json
+```
+
+`AGENTIC_SANDBOX` takes `process` (the default), `docker` (fail if Docker is missing, never silently weaker) or `auto`.
+The image, cache directory and limits can be overridden with `AGENTIC_SANDBOX_IMAGE`, `AGENTIC_SANDBOX_CACHE`, `AGENTIC_SANDBOX_MEMORY`, `AGENTIC_SANDBOX_CPUS` and `AGENTIC_SANDBOX_PIDS`.
+
 ### Run the service
 
 ```bash
@@ -117,7 +143,7 @@ orchestrator/            agentic SDLC engine (Java 17)
   src/main/resources/workflows/sdlc.json   the workflow graph (declarative)
 shortener-service/       the URL shortener: Spring Boot 4 (web: controller/advice/interceptor/filter, core: domain, store, health, config)
 knowledge/               engineering knowledge base: capability catalog + reviewed change-set recipes
-scenarios/               greenfield / brownfield / ambiguous: requirement text + recorded human decisions
+scenarios/               greenfield / brownfield / ambiguous / ai-assisted: requirement text + recorded human decisions
 examples/runs/           committed outputs of every scenario and recovery demo
 agentic                  CLI launcher (builds incrementally, then runs)
 ```
@@ -130,8 +156,8 @@ agentic                  CLI launcher (builds incrementally, then runs)
   - unit tests for validation, codes, service rules (including 32 concurrent idempotent requests), rate limiter and journal recovery;
   - **MockMvc** tests of the HTTP contract: status codes, headers, every error mapping;
   - a **full Spring Boot context** on a random port: create → redirect → restart → stats, Actuator probes and metrics.
-- **47 orchestrator tests**, made up of:
-  - **29 unit tests:** graph, policy, audit tampering, workspace atomicity/undo/binary handling, approval gateway, LLM output validation, Gradle report parsing.
+- **58 orchestrator tests**, made up of:
+  - **40 unit tests:** graph, policy, audit tampering, workspace atomicity/undo/binary handling, approval gateway, LLM output validation, model-written change sets (scope, retry feedback, policy blocking, mandatory review), Docker sandbox commands, Gradle report parsing.
   - **13 engine tests with stub agents:** parallel join, retry, bounded retry, fallback, rollback, safe-stop, approval pause/resume, rejection, re-planning, crash recovery, kill switch.
   - **5 end-to-end runs** of the real scenarios. Each has the agents generate a Spring Boot workspace and **build and test it with Gradle** in an isolated copy. This also detects drift: if the service code changes so that a reviewed recipe no longer applies, the build fails.
 

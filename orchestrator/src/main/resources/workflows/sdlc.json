@@ -44,13 +44,15 @@
       "description": "Fan-out: one stage per plan task, dependencies preserved",
       "fanOut": "plan.tasks",
       "agent": "implementation",
+      "fallbackAgent": "implementation-llm",
       "dependsOn": ["design"],
       "entryGates": ["baseline-checkpointed"],
       "exitGates": ["change-applied"],
       "mutatesWorkspace": true,
       "approval": "IF_HIGH_IMPACT",
       "maxAttempts": 3,
-      "initialBackoffMillis": 200
+      "initialBackoffMillis": 200,
+      "timeoutSeconds": 600
     },
     {
       "id": "build_test",

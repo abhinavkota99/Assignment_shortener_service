@@ -10,5 +10,10 @@ public interface LlmClient {
     /** Returns the model's text reply. Throws on transport or API errors. */
     String complete(String system, String user) throws Exception;
 
+    /** As {@link #complete(String, String)} with a larger reply budget (e.g. for code generation). */
+    default String complete(String system, String user, int maxTokens) throws Exception {
+        return complete(system, user);
+    }
+
     String model();
 }
