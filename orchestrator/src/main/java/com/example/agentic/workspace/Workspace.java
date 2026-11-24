@@ -35,7 +35,9 @@ import java.util.stream.Stream;
  */
 public final class Workspace {
 
-    private static final Set<String> SKIP_DIRS = Set.of("build", ".gradle", "data", ".idea", "out");
+    private static final Set<String> SKIP_DIRS = Set.of("build", ".gradle", "data", ".idea", ".vscode", "out");
+    /** Operating-system and editor droppings that are never part of a change (e.g. macOS Finder metadata). */
+    private static final Set<String> SKIP_FILES = Set.of(".DS_Store", "Thumbs.db", "desktop.ini");
 
     private final Path root;
     private final Path snapshots;
@@ -68,7 +70,28 @@ public final class Workspace {
         try {
             return Files.readString(resolve(path), StandardCharsets.UTF_8);
         } catch (IOException e) {
+            throw new UncheckedIOException("cannot read " + path + " as UTF-8 text", e);
+        }
+    }
+
+    public byte[] readBytes(String path) {
+        try {
+            return Files.readAllBytes(resolve(path));
+        } catch (IOException e) {
             throw new UncheckedIOException(e);
+        }
+    }
+
+    /** True if the file is valid UTF-8 text (binary files are diffed and hashed, never parsed). */
+    public boolean isText(String path) {
+        return decode(readBytes(path)) != null;
+    }
+
+    static String decode(byte[] bytes) {
+        try {
+            return StandardCharsets.UTF_8.newDecoder().decode(java.nio.ByteBuffer.wrap(bytes)).toString();
+        } catch (java.nio.charset.CharacterCodingException e) {
+            return null;
         }
     }
 
@@ -79,6 +102,7 @@ public final class Workspace {
         }
         try (Stream<Path> s = Files.walk(root)) {
             return s.filter(Files::isRegularFile)
+                    .filter(p -> !SKIP_FILES.contains(p.getFileName().toString()))
                     .map(p -> root.relativize(p).toString().replace('\\', '/'))
                     .filter(p -> SKIP_DIRS.stream().noneMatch(d -> p.startsWith(d + "/")))
                     .sorted().toList();
@@ -191,16 +215,20 @@ public final class Workspace {
         all.addAll(baseWs.files());
         List<Map<String, Object>> out = new ArrayList<>();
         for (String p : all) {
-            String before = baseWs.exists(p) ? baseWs.read(p) : null;
-            String after = exists(p) ? read(p) : null;
-            if (java.util.Objects.equals(before, after)) {
+            byte[] before = baseWs.exists(p) ? baseWs.readBytes(p) : null;
+            byte[] after = exists(p) ? readBytes(p) : null;
+            if (java.util.Arrays.equals(before, after)) {
                 continue;
             }
+            String beforeText = before == null ? null : decode(before);
+            String afterText = after == null ? null : decode(after);
+            boolean binary = (before != null && beforeText == null) || (after != null && afterText == null);
             Map<String, Object> row = new LinkedHashMap<>();
             row.put("path", p);
             row.put("change", before == null ? "added" : after == null ? "deleted" : "modified");
-            row.put("addedLines", after == null ? 0 : addedLines(before, after));
-            row.put("removedLines", before == null ? 0 : addedLines(after, before));
+            row.put("binary", binary);
+            row.put("addedLines", binary || after == null ? 0 : addedLines(beforeText, afterText));
+            row.put("removedLines", binary || before == null ? 0 : addedLines(afterText, beforeText));
             out.add(row);
         }
         return out;
@@ -327,6 +355,9 @@ public final class Workspace {
 
                 @Override
                 public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
+                    if (SKIP_FILES.contains(file.getFileName().toString())) {
+                        return FileVisitResult.CONTINUE;
+                    }
                     Files.copy(file, to.resolve(from.relativize(file).toString()), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
                     return FileVisitResult.CONTINUE;
                 }

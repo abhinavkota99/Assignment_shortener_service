@@ -1,20 +1,20 @@
 == run brownfield : Brownfield: add link expiration to the existing service
   requirements                 fallback -> requirements-rules (no LLM configured (offline mode))
   requirements                 OK   4 capabilities, 7 functional requirements, 5 NFRs, 0 ambiguities (0 blocking & open) [attempts=2]
-  codebase_analysis            OK   26 types, 36 tests, 8 routes, capabilities present: ["link_creation","custom_alias","redirect","click_analytics","durability","idempotency","abuse_protection","operability"]
+  codebase_analysis            OK   32 types, 36 tests, 7 routes, capabilities present: ["link_creation","custom_alias","redirect","click_analytics","durability","idempotency","abuse_protection","operability"]
   plan                         OK   4 tasks in 3 waves; reused 3, excluded 0
   design                       OK   approved
   implement                    expanded into 4 parallelisable task stages
   implement:T-expiry-domain    OK   Expiry in domain model and service: 3 files, +38 lines
   implement:T-expiry-store     OK   Persist expiry in the journal (backward compatible): 1 files, +5 lines
-  implement:T-expiry-api       OK   expiresAt in the HTTP contract, 410 Gone: 1 files, +19 lines
-  implement:T-expiry-tests     OK   Expiry tests (service, API, journal compatibility): 3 files, +198 lines
+  implement:T-expiry-api       OK   expiresAt in the HTTP contract, 410 Gone: 2 files, +21 lines
+  implement:T-expiry-tests     OK   Expiry tests (service, API, journal compatibility): 3 files, +186 lines
   implement                    OK   synchronisation barrier reached
   docs                         OK   generated 2 documents
-  security_scan                OK   8 changed source files scanned: 0 critical, 0 high
-  build_test                   OK   46 tests, 0 failures
-  release_readiness            OK   READY: 7 checks, 10 files changed
-  release                      OK   release package with 10 files at release/
+  security_scan                OK   9 changed source files scanned: 0 critical, 0 high
+  build_test                   OK   59 tests, 0 failures
+  release_readiness            OK   READY: 7 checks, 11 files changed
+  release                      OK   release package with 11 files at release/
 run brownfield -> SUCCEEDED
 
 status : SUCCEEDED

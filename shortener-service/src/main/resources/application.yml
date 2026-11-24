@@ -1,0 +1,44 @@
+# Every shortener.* value can be overridden with an environment variable, e.g. SHORTENER_BASE_URL,
+# SHORTENER_DATA_FILE (empty = in-memory), SHORTENER_RATE_LIMIT_PER_SECOND, SHORTENER_BLOCKED_HOSTS.
+spring:
+  application:
+    name: shortener-service
+  main:
+    banner-mode: off
+
+server:
+  port: 8080
+  shutdown: graceful
+  error:
+    include-message: never
+    include-stacktrace: never
+
+shortener:
+  base-url: http://localhost:8080
+  data-file: data/links.jsonl
+  code-length: 7
+  max-code-attempts: 5
+  max-url-length: 2048
+  max-body-bytes: 16384
+  rate-limit-per-second: 5.0
+  rate-limit-burst: 20
+  allow-private-targets: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: always
+      group:
+        readiness:
+          include: readinessState,storage
+
+logging:
+  structured:
+    format:
+      console: ecs

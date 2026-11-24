@@ -5,35 +5,36 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.io.File;
 import java.io.IOException;
-import java.io.StringWriter;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import javax.tools.Diagnostic;
-import javax.tools.DiagnosticCollector;
-import javax.tools.JavaCompiler;
-import javax.tools.JavaFileObject;
-import javax.tools.StandardJavaFileManager;
-import javax.tools.ToolProvider;
+import java.util.stream.Stream;
 
 /**
- * Verification: compiles every main and test source in the workspace (Java 17 target) and runs
- * the complete JUnit suite in a separate JVM with a hard timeout, so a hanging or crashing test can
- * never take down the orchestrator. Output is a structured test report; whether it is good enough
- * is decided by the stage's exit gates, not by this agent.
+ * Verification: builds the workspace exactly as a developer would, with Gradle (compile + full test
+ * suite), in an isolated copy and a separate process with a hard timeout. The workspace is the
+ * service module, which is a self-contained Gradle build; the agent only adds a {@code settings.gradle}
+ * to the copy so Gradle treats it as a root project.
+ *
+ * <p>The result is a structured test report (counts parsed from JUnit XML). Whether it is good enough
+ * is decided by the stage's exit gates, not by this agent. Dependency-download problems are reported as
+ * transient (retryable) failures; compile errors and failing tests are not.
  */
 public final class BuildTestAgent implements Agent {
 
-    private static final Pattern OK = Pattern.compile("^OK \\((\\d+) tests?\\)", Pattern.MULTILINE);
-    private static final Pattern FAILED = Pattern.compile("^Tests run: (\\d+),\\s+Failures: (\\d+)", Pattern.MULTILINE);
-    private static final Pattern FAILURE_LINE = Pattern.compile("^\\d+\\) (.+)$", Pattern.MULTILINE);
-    static final long TEST_TIMEOUT_SECONDS = 300;
+    static final long BUILD_TIMEOUT_SECONDS = 900;
+    private static final Pattern COMPILE_ERROR = Pattern.compile("^(.+\\.java):(\\d+): error: (.+)$", Pattern.MULTILINE);
+    private static final Pattern NETWORK_ERROR = Pattern.compile(
+            "Could not resolve|Could not GET|Could not HEAD|Connection refused|UnknownHostException|Plugin \\[id: .*\\] was not found");
+    private static final Pattern SECRET_ENV = Pattern.compile("(?i).*(token|secret|password|passwd|api_?key|credential).*");
 
     @Override
     public String name() {
@@ -43,54 +44,66 @@ public final class BuildTestAgent implements Agent {
     @Override
     public AgentResult execute(AgentContext ctx) throws AgentException {
         ctx.input("design"); // lineage
-        JavaCompiler javac = ToolProvider.getSystemJavaCompiler();
-        if (javac == null) {
-            throw AgentException.permanent("a JDK (not a JRE) is required to compile the workspace");
-        }
-        Path ws = ctx.workspace().root();
-        List<File> sources = new ArrayList<>();
-        List<String> testClasses = new ArrayList<>();
-        for (String f : ctx.workspace().files()) {
-            if (!f.endsWith(".java")) {
-                continue;
-            }
-            sources.add(ws.resolve(f).toFile());
-            if (f.startsWith("src/test/java/") && f.endsWith("Test.java")) {
-                testClasses.add(f.substring("src/test/java/".length(), f.length() - ".java".length()).replace('/', '.'));
-            }
-        }
         Path out = ctx.runDir().resolve("build").resolve(ctx.stage().id().replace(':', '_') + "-a" + ctx.attempt());
-        Path classes = out.resolve("classes");
-        String libs = libraryClasspath();
+        Path project = out.resolve("project");
+        Path log = out.resolve("gradle.log");
         ObjectNode report = Json.object();
-        report.put("sourceFiles", sources.size());
         long started = System.nanoTime();
         try {
             deleteRecursively(out);
-            Files.createDirectories(classes);
-            DiagnosticCollector<JavaFileObject> diags = new DiagnosticCollector<>();
-            boolean compiled;
-            try (StandardJavaFileManager fm = javac.getStandardFileManager(diags, Locale.ROOT, StandardCharsets.UTF_8)) {
-                List<String> options = List.of("--release", "17", "-encoding", "UTF-8", "-proc:none", "-nowarn",
-                        "-cp", libs, "-d", classes.toString());
-                compiled = sources.isEmpty() || javac.getTask(new StringWriter(), fm, diags, options, null,
-                        fm.getJavaFileObjectsFromFiles(sources)).call();
+            Files.createDirectories(project);
+            int files = 0;
+            for (String f : ctx.workspace().files()) {
+                Path target = project.resolve(f);
+                Files.createDirectories(target.getParent());
+                Files.copy(ctx.workspace().root().resolve(f), target);
+                files++;
             }
-            report.put("compiled", compiled);
-            if (!compiled) {
+            if (!Files.exists(project.resolve("build.gradle"))) {
+                throw AgentException.permanent("workspace has no build.gradle; nothing to build");
+            }
+            Files.writeString(project.resolve("settings.gradle"), "rootProject.name = 'shortener-service'\n", StandardCharsets.UTF_8);
+            report.put("sourceFiles", files);
+
+            List<String> cmd = new ArrayList<>(gradleCommand(ctx.repoRoot()));
+            cmd.addAll(List.of("-p", project.toString(), "test", "--console=plain", "--stacktrace"));
+            String extra = System.getenv("AGENTIC_WORKSPACE_GRADLE_ARGS");
+            if (extra != null && !extra.isBlank()) {
+                cmd.addAll(List.of(extra.trim().split("\\s+")));
+            }
+            ProcessBuilder pb = new ProcessBuilder(cmd).directory(project.toFile()).redirectErrorStream(true).redirectOutput(log.toFile());
+            // The code under test must not see the operator's credentials.
+            pb.environment().keySet().removeIf(k -> SECRET_ENV.matcher(k).matches());
+            Process p = pb.start();
+            if (!p.waitFor(BUILD_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
+                p.destroyForcibly();
+                throw AgentException.transientFailure("workspace build exceeded " + BUILD_TIMEOUT_SECONDS + " s and was killed");
+            }
+            String text = Files.readString(log, StandardCharsets.UTF_8);
+            report.put("log", ctx.runDir().relativize(log).toString());
+            report.put("gradleExitCode", p.exitValue());
+
+            Path results = project.resolve("build/test-results/test");
+            boolean haveResults = Files.isDirectory(results);
+            if (p.exitValue() != 0 && !haveResults) {
+                if (NETWORK_ERROR.matcher(text).find()) {
+                    throw AgentException.transientFailure("dependency resolution failed (network?); see " + report.path("log").asText());
+                }
+                report.put("compiled", false);
                 ArrayNode errors = report.putArray("compileErrors");
-                diags.getDiagnostics().stream().filter(d -> d.getKind() == Diagnostic.Kind.ERROR).limit(20)
-                        .forEach(d -> errors.add(relative(ws, d) + ": " + d.getMessage(Locale.ROOT)));
+                Matcher m = COMPILE_ERROR.matcher(text);
+                while (m.find() && errors.size() < 20) {
+                    errors.add(relative(project, m.group(1)) + ":" + m.group(2) + ": " + m.group(3));
+                }
+                if (errors.isEmpty()) {
+                    errors.add("build failed before tests ran; see " + report.path("log").asText());
+                }
                 report.put("testsRun", 0);
                 report.put("failures", 0);
-                return new AgentResult("compilation failed (" + errors.size() + " errors)").artifact("test_report", report);
+                return new AgentResult("build failed (" + errors.size() + " errors)").artifact("test_report", report);
             }
-            if (testClasses.isEmpty()) {
-                report.put("testsRun", 0);
-                report.put("failures", 0);
-                return new AgentResult("compiled; no tests found").artifact("test_report", report);
-            }
-            runTests(ctx, report, classes, libs, testClasses, out);
+            report.put("compiled", true);
+            readJUnitXml(results, report);
         } catch (IOException e) {
             throw AgentException.transientFailure("build I/O error: " + e.getMessage());
         } catch (InterruptedException e) {
@@ -98,78 +111,84 @@ public final class BuildTestAgent implements Agent {
             throw AgentException.transientFailure("build interrupted");
         }
         report.put("durationMs", TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started));
-        report.set("testClasses", Json.tree(testClasses));
         String summary = report.path("testsRun").asInt() + " tests, " + report.path("failures").asInt() + " failures";
         return new AgentResult(summary).artifact("test_report", report);
     }
 
-    private static void runTests(AgentContext ctx, ObjectNode report, Path classes, String libs, List<String> testClasses, Path out)
-            throws IOException, InterruptedException, AgentException {
-        Path log = out.resolve("junit.log");
-        List<String> cmd = new ArrayList<>(List.of(javaBinary(), "-Xmx512m", "-cp", classes + File.pathSeparator + libs,
-                "org.junit.runner.JUnitCore"));
-        cmd.addAll(testClasses);
-        // Fixed, minimal environment for the test JVM: no credentials leak into the code under test.
-        ProcessBuilder pb = new ProcessBuilder(cmd).directory(out.toFile()).redirectErrorStream(true).redirectOutput(log.toFile());
-        pb.environment().keySet().removeIf(k -> !k.equals("PATH") && !k.equals("HOME") && !k.equals("TMPDIR") && !k.equals("LANG"));
-        Process p = pb.start();
-        if (!p.waitFor(TEST_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
-            p.destroyForcibly();
-            throw AgentException.transientFailure("test JVM exceeded " + TEST_TIMEOUT_SECONDS + " s and was killed");
-        }
-        String text = Files.readString(log, StandardCharsets.UTF_8);
-        report.put("log", ctx.runDir().relativize(log).toString());
-        Matcher ok = OK.matcher(text);
-        Matcher failed = FAILED.matcher(text);
-        if (ok.find()) {
-            report.put("testsRun", Integer.parseInt(ok.group(1)));
-            report.put("failures", 0);
-        } else if (failed.find()) {
-            report.put("testsRun", Integer.parseInt(failed.group(1)));
-            report.put("failures", Integer.parseInt(failed.group(2)));
-            ArrayNode f = report.putArray("failedTests");
-            Matcher fl = FAILURE_LINE.matcher(text);
-            while (fl.find() && f.size() < 20) {
-                f.add(fl.group(1));
-            }
-        } else {
-            throw AgentException.transientFailure("could not parse JUnit output (exit " + p.exitValue() + "); see " + log);
-        }
-    }
+    private static final Pattern SUITE = Pattern.compile("<testsuite\\b[^>]*>");
+    private static final Pattern FAILED_CASE = Pattern.compile(
+            "<testcase name=\"([^\"]*)\" classname=\"([^\"]*)\"[^>]*>\\s*<(failure|error)\\b");
 
-    /** Jars the workspace code compiles and tests against: the same pinned versions the orchestrator ships with. */
-    static String libraryClasspath() {
-        List<String> keep = new ArrayList<>();
-        for (String entry : System.getProperty("java.class.path").split(File.pathSeparator)) {
-            String name = Path.of(entry).getFileName() == null ? "" : Path.of(entry).getFileName().toString();
-            if (name.endsWith(".jar") && (name.startsWith("jackson-") || name.startsWith("junit-") || name.startsWith("hamcrest-"))) {
-                keep.add(entry);
+    /** Aggregates Gradle's JUnit XML reports (works for JUnit 4 and JUnit Platform alike). */
+    static void readJUnitXml(Path dir, ObjectNode report) throws IOException {
+        int tests = 0;
+        int skipped = 0;
+        int failed = 0;
+        ArrayNode classes = report.putArray("testClasses");
+        ArrayNode failedTests = Json.array();
+        if (Files.isDirectory(dir)) {
+            try (Stream<Path> s = Files.list(dir)) {
+                for (Path xml : s.filter(x -> x.getFileName().toString().endsWith(".xml")).sorted().toList()) {
+                    String text = Files.readString(xml, StandardCharsets.UTF_8);
+                    Matcher suite = SUITE.matcher(text);
+                    if (!suite.find()) {
+                        continue;
+                    }
+                    String header = suite.group();
+                    tests += attr(header, "tests");
+                    skipped += attr(header, "skipped");
+                    failed += attr(header, "failures") + attr(header, "errors");
+                    classes.add(xml.getFileName().toString().replaceFirst("^TEST-", "").replaceFirst("\\.xml$", ""));
+                    Matcher f = FAILED_CASE.matcher(text);
+                    while (f.find() && failedTests.size() < 20) {
+                        failedTests.add(f.group(2) + "." + f.group(1));
+                    }
+                }
             }
         }
-        return String.join(File.pathSeparator, keep);
-    }
-
-    private static String javaBinary() {
-        return ProcessHandle.current().info().command()
-                .orElse(Path.of(System.getProperty("java.home"), "bin", "java").toString());
-    }
-
-    private static String relative(Path ws, Diagnostic<? extends JavaFileObject> d) {
-        if (d.getSource() == null) {
-            return "?";
+        report.put("testsRun", tests - skipped);
+        report.put("skipped", skipped);
+        report.put("failures", failed);
+        if (!failedTests.isEmpty()) {
+            report.set("failedTests", failedTests);
         }
-        Path p = Path.of(d.getSource().toUri());
-        return (p.startsWith(ws) ? ws.relativize(p).toString() : p.getFileName().toString()) + ":" + d.getLineNumber();
     }
 
-    private static void deleteRecursively(Path p) throws IOException {
+    private static int attr(String header, String name) {
+        Matcher m = Pattern.compile("\\b" + name + "=\"(\\d+)\"").matcher(header);
+        return m.find() ? Integer.parseInt(m.group(1)) : 0;
+    }
+
+    /** The repository's Gradle wrapper when present (pinned Gradle version), else a Gradle on PATH. */
+    static List<String> gradleCommand(Path repoRoot) {
+        boolean windows = System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("win");
+        Path wrapper = repoRoot.resolve(windows ? "gradlew.bat" : "gradlew");
+        if (Files.isRegularFile(wrapper)) {
+            return List.of(wrapper.toAbsolutePath().toString());
+        }
+        return List.of(windows ? "gradle.bat" : "gradle");
+    }
+
+    private static String relative(Path project, String file) {
+        Path p = Path.of(file);
+        return p.startsWith(project) ? project.relativize(p).toString().replace(File.separatorChar, '/') : p.getFileName().toString();
+    }
+
+    static void deleteRecursively(Path p) throws IOException {
         if (!Files.exists(p)) {
             return;
         }
-        try (var s = Files.walk(p)) {
-            for (Path x : s.sorted(java.util.Comparator.reverseOrder()).toList()) {
+        try (Stream<Path> s = Files.walk(p)) {
+            for (Path x : s.sorted(Comparator.reverseOrder()).toList()) {
                 Files.delete(x);
             }
         }
+    }
+
+    /** Visible for tests. */
+    static Map<String, String> secretFree(Map<String, String> env) {
+        Map<String, String> copy = new java.util.HashMap<>(env);
+        copy.keySet().removeIf(k -> SECRET_ENV.matcher(k).matches());
+        return copy;
     }
 }

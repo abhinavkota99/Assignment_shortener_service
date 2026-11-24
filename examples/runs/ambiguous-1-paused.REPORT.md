@@ -4,8 +4,8 @@
 |---|---|
 | Scenario | `ambiguous-safety-and-insight` |
 | Status | **AWAITING_INPUT** - waiting for answers to clarification questions (see CLARIFICATIONS.md) |
-| Started | 2026-11-23T23:16:24.420Z |
-| Active time | 123 ms (excludes time paused for humans) |
+| Started | 2026-11-24T04:17:29.445Z |
+| Active time | 96 ms (excludes time paused for humans) |
 | Resumes | 0 |
 | Audit chain | verified, 13 entries (hash chain intact) |
 
@@ -39,7 +39,7 @@ Interpreter: `rules` - 2 capabilities, 3 functional requirements, 4 NFRs, 2 ambi
 | Stage | Phase | Status | Attempts | Agent | Duration | Notes |
 |---|---|---|---|---|---|---|
 | `requirements` | REQUIREMENTS | AWAITING_INPUT | 2 | requirements-rules |  | fallback; error: no LLM configured (offline mode);  |
-| `codebase_analysis` | ANALYSIS | SUCCEEDED | 1 | codebase-analysis | 108 ms |  |
+| `codebase_analysis` | ANALYSIS | SUCCEEDED | 1 | codebase-analysis | 85 ms |  |
 | `plan` | PLANNING | PENDING | 0 |  |  |  |
 | `design` | DESIGN | PENDING | 0 |  |  |  |
 | `implement` | IMPLEMENTATION | PENDING | 0 |  |  |  |
@@ -69,7 +69,7 @@ Interpreter: `rules` - 2 capabilities, 3 functional requirements, 4 NFRs, 2 ambi
   "scenario" : "ambiguous-safety-and-insight",
   "status" : "AWAITING_INPUT",
   "finished" : false,
-  "endToEndActiveMs" : 123,
+  "endToEndActiveMs" : 96,
   "stagesExecuted" : 2,
   "stagesFailed" : 0,
   "retries" : 0,

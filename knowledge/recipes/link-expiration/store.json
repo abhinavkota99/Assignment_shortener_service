@@ -10,8 +10,8 @@
     {
       "op": "patch",
       "path": "src/main/java/com/example/shortener/store/JournalLinkRepository.java",
-      "find": "                            Instant.parse(n.get(\"createdAt\").asText()), n.path(\"custom\").asBoolean()),",
-      "replace": "                            Instant.parse(n.get(\"createdAt\").asText()), n.path(\"custom\").asBoolean(),\n                            n.hasNonNull(\"expiresAt\") ? Instant.parse(n.get(\"expiresAt\").asText()) : null),"
+      "find": "                            Instant.parse(n.get(\"createdAt\").asString()), n.path(\"custom\").asBoolean()),",
+      "replace": "                            Instant.parse(n.get(\"createdAt\").asString()), n.path(\"custom\").asBoolean(),\n                            n.hasNonNull(\"expiresAt\") ? Instant.parse(n.get(\"expiresAt\").asString()) : null),"
     }
   ]
 }

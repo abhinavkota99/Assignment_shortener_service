@@ -4,10 +4,10 @@
   "pausedRuns" : 1,
   "successRate" : 0.8,
   "retriesPerRun" : 0.6,
-  "retryRatePerStage" : 0.042,
+  "retryRatePerStage" : 0.041,
   "rollbackFrequency" : 0.2,
   "fallbacksPerRun" : 0.0,
-  "mttrMs" : 486,
-  "e2eLatencyP50Ms" : 3079,
-  "e2eLatencyP95Ms" : 5108
+  "mttrMs" : 514,
+  "e2eLatencyP50Ms" : 5279,
+  "e2eLatencyP95Ms" : 6938
 }

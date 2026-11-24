@@ -1,46 +1,36 @@
 package com.example.shortener.config;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.util.Map;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
-public class SettingsTest {
-
-    @Test
-    public void defaultsFromEmptyEnvironment() {
-        Settings s = Settings.fromMap(Map.of());
-        assertEquals(8080, s.port());
-        assertEquals("http://127.0.0.1:8080", s.baseUrl());
-        assertEquals("data/links.jsonl", s.dataFile());
-    }
+class SettingsTest {
 
     @Test
-    public void overridesAndNormalisation() {
-        Settings s = Settings.fromMap(Map.of("SHORTENER_PORT", "9000", "SHORTENER_BASE_URL", "https://sho.rt/",
-                "SHORTENER_DATA_FILE", "", "SHORTENER_RATE_LIMIT_PER_SEC", "2.5"));
-        assertEquals(9000, s.port());
+    void normalisesBaseUrlAndBlankDataFile() {
+        Settings s = new Settings("https://sho.rt/", "  ", 7, 5, 2048, 16384, 2.5, 10, false);
         assertEquals("https://sho.rt", s.baseUrl());
-        assertNull("blank data file means in-memory", s.dataFile());
-        assertEquals(2.5, s.rateLimitPerSecond(), 0.0);
+        assertNull(s.dataFile(), "blank data file means in-memory storage");
+        assertEquals(2.5, s.rateLimitPerSecond());
     }
 
     @Test
-    public void failsFastOnBadValues() {
-        try {
-            Settings.fromMap(Map.of("SHORTENER_PORT", "eighty"));
-            fail();
-        } catch (IllegalArgumentException e) {
-            assertTrue(e.getMessage().contains("SHORTENER_PORT"));
-        }
-        try {
-            Settings.fromMap(Map.of("SHORTENER_CODE_LENGTH", "2"));
-            fail();
-        } catch (IllegalArgumentException e) {
-            assertTrue(e.getMessage().contains("codeLength"));
-        }
+    void failsFastOnInvalidValues() {
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+                () -> new Settings("http://x", null, 2, 5, 2048, 16384, 5, 20, false));
+        assertTrue(e.getMessage().contains("code-length"));
+        assertThrows(IllegalArgumentException.class, () -> new Settings("http://x", null, 7, 0, 2048, 16384, 5, 20, false));
+        assertThrows(IllegalArgumentException.class, () -> new Settings("http://x", null, 7, 5, 2048, 16384, 0, 20, false));
+    }
+
+    @Test
+    void copyHelpers() {
+        Settings s = Settings.defaults().withBaseUrl("https://a.b").withRateLimit(1, 2).withPrivateTargetsAllowed();
+        assertEquals("https://a.b", s.baseUrl());
+        assertEquals(2, s.rateLimitBurst());
+        assertTrue(s.allowPrivateTargets());
     }
 }

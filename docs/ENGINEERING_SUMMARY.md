@@ -17,7 +17,7 @@ Ambiguities in the brief itself, and how I resolved them:
 |---|---|
 | "Agentic" is undefined: must agents be LLM calls? | Agents are autonomous units with bounded authority. The model is a **pluggable proposal source** behind validation, never a trusted actor. The default mode is deterministic and offline, so every behaviour is reproducible in CI and reviewable. |
 | "Release readiness" vs "release" | The system packages a verified, approved patch. **It never pushes or deploys**: release execution belongs to existing change management (MR, CI, deploy pipeline). |
-| How "real" must greenfield output be? | Real enough to run: the generated workspace compiles and passes 36 tests in a separate JVM on every run, and the reference service is a usable product. |
+| How "real" must greenfield output be? | Real enough to run: the generated Spring Boot workspace is built and tested with Gradle (49 tests) on every greenfield run, and the reference service is a usable product. |
 | Human approvals in an automated demo | Approvals are recorded **as data** (reviewable files, named approvers) or given interactively. The demo uses files, so runs are reproducible, and a missing decision pauses the run instead of defaulting to yes. |
 
 ## 2. Plan and rationale
@@ -44,15 +44,15 @@ The order of work was:
 | D-09 | Hash-chained, fail-closed audit log | Tamper evidence without infrastructure. If auditing fails, the run stops. | Plain logs (mutable); external ledger (infrastructure) |
 | D-10 | A declarative knowledge catalog plus reviewed recipes in offline mode; LLM as a validated seam | Reproducible, testable, reviewable autonomy. Model output is untrusted input: JSON-validated and restricted to known ids, with a deterministic fallback. | Prompt-driven agents writing code directly (unreviewable, non-reproducible, untestable offline) |
 | D-11 | Patch anchors must match exactly once; no "already applied" heuristics | Drift between reviewed change and current code is a conflict, never a silent misapplication. An idempotency heuristic was tried and removed after a test showed false positives. | Fuzzy patching |
-| D-12 | Service on the JDK HTTP server + Jackson, with a journal repository behind a port | Small attack surface and fast startup, and it runs anywhere with a JDK. The port keeps a database swap local to one class. *Also forced by the build environment, which had no access to Maven Central* (§7). | Spring Boot (the team standard; would be my production choice: see §7) |
+| D-12 | Service on **Spring Boot 4.0** with a framework-free domain (`core/`, `store/`) wired by one `@Configuration`, and storage behind a `LinkRepository` port | Spring Boot is the team standard and gives Actuator probes, Micrometer metrics, structured logging and validated configuration for free. Keeping Spring out of the domain keeps business rules unit-testable in milliseconds and the framework replaceable. The port keeps a database swap (JPA/Postgres) local to one class. | Spring annotations throughout the domain; Spring Data from day one (a database dependency the brief doesn't need) |
 | D-13 | 302 + `no-cache`; HEAD not counted; no IPs stored | Correct analytics, expiry that actually takes effect, privacy by default. | 301 (cached forever; breaks analytics and expiry) |
 
 ## 3. Artifacts produced
 
 | Artifact | Location |
 |---|---|
-| Working service + 36 tests + generated API reference | `shortener-service/` |
-| Orchestrator + 43 tests (unit, engine, end-to-end) | `orchestrator/` |
+| Working Spring Boot 4 service + 49 tests + generated API reference | `shortener-service/` |
+| Orchestrator + 47 tests (unit, engine, end-to-end) | `orchestrator/` |
 | Workflow definition (declarative DAG with gates and approval modes) | `orchestrator/src/main/resources/workflows/sdlc.json` |
 | Knowledge base: capabilities, tasks, ambiguity patterns, reviewed change sets | `knowledge/` |
 | Scenario definitions and recorded human decisions | `scenarios/` |
@@ -88,16 +88,16 @@ The order of work was:
 
 ## 5. Validation approach
 
-* **Static:** both modules compile with `-Xlint:all -Werror`. Generated workspaces compile with `--release 17`.
-* **Service:** 36 tests.
-  * Unit tests: validation edge cases including IDN, IPv6 unique-local, metadata IP and redirect loops; code generation; idempotency under 32 concurrent threads; collision retry and its bound; analytics windows; rate limiter refill and eviction; API error mapping.
-  * Journal: restart, torn tail, corruption, future format version.
-  * Integration: real sockets, including a restart and a 413 for an oversized body.
-  * Manual smoke test: the running binary exercised with curl.
-* **Orchestrator:** 43 tests.
-  * Pure components: graph cycles and re-expansion; policy rules; audit tamper detection (modify, delete, reorder); workspace atomicity, undo and path escape; approval gateway separation of duties; LLM output validation.
+* **Static:** both modules compile with lint warnings enabled (`-Werror` for the orchestrator). Generated workspaces are built with the same Gradle and Spring Boot versions as the reference service.
+* **Service:** 49 tests (JUnit 5).
+  * Unit tests: validation edge cases including IDN, IPv6 unique-local, metadata IP and redirect loops; code generation; idempotency under 32 concurrent threads; collision retry and its bound; analytics windows; rate limiter refill and eviction.
+  * MockMvc contract tests: status codes, headers, every error mapping (400/404/405/409/413/415/429), request-id handling.
+  * Journal: restart, torn tail, corruption, future format version (Jackson 3).
+  * Full Spring Boot context on a random port: create, redirect, restart with data intact, Actuator liveness/readiness, metrics, uniform errors.
+* **Orchestrator:** 47 tests.
+  * Pure components (29): graph cycles and re-expansion; policy rules; audit tamper detection (modify, delete, reorder); workspace atomicity, undo, path escape, OS-metadata and binary-file handling; approval gateway separation of duties; LLM output validation; Gradle report parsing and credential stripping.
   * Engine with stub agents (13 tests): prove that branches run *concurrently* (a barrier that only releases if both run), and cover retry/bounded retry, fallback, rollback, safe-stop, pause/resume, rejection, invalidation, crash recovery and the kill switch.
-  * End-to-end: all three real scenarios, plus the LLM seam with fake models (valid output used, invalid output falls back).
+  * End-to-end (5): all three real scenarios, each generating a Spring Boot workspace and building it with Gradle, plus the LLM seam with fake models (valid output used, invalid output falls back).
 * **Independent check of the output:** the brownfield `CHANGE.patch` was applied to a clean copy of the module with `git apply`, and the module's real Gradle build passed all 46 tests.
 * **Bugs found by validation and fixed in the engine:**
   * A traceability gap: capabilities delivered by tasks owned by other capabilities.
@@ -105,6 +105,7 @@ The order of work was:
   * A potential livelock in the progress check.
   * A false-positive "already applied" patch heuristic.
   * A garbled generated API table.
+  * During the Spring Boot port, on the first real builds: a bean-name clash with Spring MVC's own `requestContextFilter`; a test whose settings were silently overridden by `application.yml` (default properties have the lowest precedence); and a macOS `.DS_Store` file in the baseline that broke workspace diffs. Each was fixed at the root and covered by a test.
 
 ## 6. Assumptions
 
@@ -121,13 +122,7 @@ The order of work was:
 
 1. **Code generation is not LLM-driven.** In this submission, implementation agents replay *reviewed* change sets: greenfield copies from the reference implementation, brownfield applies patches. The pipeline around them is real: preview, policy, atomic apply with undo, compile, test, scan, approval, release. An LLM code generator is a new recipe source behind the same `ImplementationAgent` contract. It was not built because its output could not be made reproducible or verified here.
 2. **Requirement understanding is catalog-driven.** Keyword and pattern matching against known capabilities and ambiguity patterns. The optional LLM classifier (`--llm`, needs `ANTHROPIC_API_KEY`) is unit-tested with fake models but was **not exercised against the live API**, because the build environment had no network access.
-3. **Built offline.** The environment could not reach Maven Central, so:
-   * JUnit 4.13.2 is used instead of JUnit 5;
-   * the Gradle build was verified with identical dependency versions from a local folder (`-PofflineLibs`);
-   * the Gradle wrapper download path was not exercised;
-   * Spring Boot was not an option.
-
-   A production version for a Spring shop would wrap `ShortenerService` in Spring MVC controllers and swap the journal for JPA/Postgres. The domain, validation and tests carry over unchanged.
+3. **Two build environments.** The service is Spring Boot 4.0.8 and needs Maven Central. The orchestrator is plain Java + Jackson 2 + JUnit 4, because it was developed in a sandbox without Maven Central access and verified there offline (`-PofflineLibs`, `-PskipE2E`). The Spring service and the end-to-end scenario tests were built and verified on a networked developer machine. A follow-up would move the orchestrator to JUnit 5 for consistency.
 4. Orchestrator scale: one process, file-based state, no distributed locking, no multi-tenancy, and timeouts are cooperative for in-process agents.
 5. Policy rules are regex-based heuristics, not a full SAST tool. In a real pipeline they complement Snyk/CodeQL rather than replace them.
 6. The service is single-node (see the §4 trade-offs).
@@ -148,6 +143,6 @@ The order of work was:
 | Audit-grade observability and traceability | `AuditLog` (hash chain), `RunReport`, traceability matrix in readiness |
 | Reliability metrics: success rate, retry/rollback frequency, MTTR, e2e latency | `Metrics.forRun` / `Metrics.aggregate`, `agentic metrics` |
 | Dynamic re-planning when upstream outputs change | `invalidateStale`, rejection → constraint → re-execution, fan-out re-expansion |
-| Production-quality code, API definitions, tests, docs | `shortener-service/`, generated `docs/API.md`, 79 tests, CI |
+| Production-quality code, API definitions, tests, docs | `shortener-service/` (Spring Boot 4), generated `docs/API.md`, 96 tests, CI |
 | Controlled autonomy | Autonomy boundaries table in ARCHITECTURE §6; agents never modify the repository |
 | Three scenarios with decomposition, orchestration and validation | `docs/SCENARIOS.md`, `examples/runs/` |

@@ -2,41 +2,29 @@
   "runId" : "greenfield",
   "scenario" : "greenfield-url-shortener",
   "files" : [ {
+    "path" : "build.gradle",
+    "change" : "added",
+    "sha256" : "9c57fe83fe5ba0e6d8be7e635ec5694612c0d34b3c74227bb546ab82810a1609"
+  }, {
     "path" : "docs/API.md",
     "change" : "added",
-    "sha256" : "1d354e135aa0a2d8423b837b20a0e8c9ce28f81b41d83415e4c67fc2337e15e6"
+    "sha256" : "01f4b2626a8604021d8938600d0c68ad2e60bc8420481dad6b3909414d240ba2"
   }, {
     "path" : "docs/changes/greenfield-url-shortener.md",
     "change" : "added",
-    "sha256" : "087b6118f5f58d018bdce8ed76fe0f8643d1e4e044e53a9bbf37ae3f70dcbcd7"
+    "sha256" : "36b7ce743a4b57f0620e779e23297784cde5fac931929d03c39a936b1ee2e909"
   }, {
     "path" : "src/main/java/com/example/shortener/ShortenerApplication.java",
     "change" : "added",
-    "sha256" : "1f1ee22d257eb0cb7b9f6a0bdf807e6371b4a9baf82aa411fc293123036c249c"
-  }, {
-    "path" : "src/main/java/com/example/shortener/api/ApiRequest.java",
-    "change" : "added",
-    "sha256" : "9744df3772985cdd80461e14273b3d96cdad1056ed05edcd48469bf1de429034"
-  }, {
-    "path" : "src/main/java/com/example/shortener/api/ApiResponse.java",
-    "change" : "added",
-    "sha256" : "206d15c3bbac132dd603e144d744d01eaebbab615e5da2f3f96d17f127be66c7"
-  }, {
-    "path" : "src/main/java/com/example/shortener/api/HttpServerAdapter.java",
-    "change" : "added",
-    "sha256" : "735db991078c128ef1baca542e3a89ebcde62d79a43215c958289cb49392424a"
-  }, {
-    "path" : "src/main/java/com/example/shortener/api/ShortenerApi.java",
-    "change" : "added",
-    "sha256" : "a7e921a62308eee1cd8ae6843743a8b9482906dbc190ebdadc55ae09078e2d7a"
-  }, {
-    "path" : "src/main/java/com/example/shortener/api/TokenBucketRateLimiter.java",
-    "change" : "added",
-    "sha256" : "6770f41ebf686e7e5e0dddcb935eb64e75d32f1a7b78009cd4924c49ac1b02fe"
+    "sha256" : "d6e8cf02d11347390b0af451595aab7a814da80247d63919d3c2bf9656ef8281"
   }, {
     "path" : "src/main/java/com/example/shortener/config/Settings.java",
     "change" : "added",
-    "sha256" : "6bbcc7af3795f2166621ca739b090412e2a229466a4b7072b3700e4ba82ce768"
+    "sha256" : "84a508f310d9fdc38c76df1f5ae8d3062f80f4f52dee38eba974be882ff957c0"
+  }, {
+    "path" : "src/main/java/com/example/shortener/config/ShortenerConfiguration.java",
+    "change" : "added",
+    "sha256" : "f4f114d2a020b62656fff118b579081195c1a5d5af7b8c68d68686e90272dd36"
   }, {
     "path" : "src/main/java/com/example/shortener/core/ClickEvent.java",
     "change" : "added",
@@ -44,7 +32,7 @@
   }, {
     "path" : "src/main/java/com/example/shortener/core/CodeGenerator.java",
     "change" : "added",
-    "sha256" : "c5af5089caae55770b885401572be0d2ab03406b15cd8d165627a41b062ce107"
+    "sha256" : "95de195a6a8bc3454548e2d84198261ba09eaad20cb595c4a2d9618888282865"
   }, {
     "path" : "src/main/java/com/example/shortener/core/Link.java",
     "change" : "added",
@@ -66,6 +54,10 @@
     "change" : "added",
     "sha256" : "d0bb5ccc596cd445a38e34e9e57252ed0aa9da05d484384944b38086b272929f"
   }, {
+    "path" : "src/main/java/com/example/shortener/health/StorageHealthIndicator.java",
+    "change" : "added",
+    "sha256" : "9d4959304ff044311fcbcadb44d9ead1b063171b86c925ccb3ff853eca0ea766"
+  }, {
     "path" : "src/main/java/com/example/shortener/store/DuplicateKeyException.java",
     "change" : "added",
     "sha256" : "cc9eddfb248c2cb6d036d8aca3b172703c64c5ca189c72bf8ae647d01971a3e3"
@@ -76,45 +68,85 @@
   }, {
     "path" : "src/main/java/com/example/shortener/store/JournalLinkRepository.java",
     "change" : "added",
-    "sha256" : "021cff552e9f7d4514ffa335e69ea30003cffd79179c81d7300374eb5a0864b4"
+    "sha256" : "e6f51622e5d50993024a09b3183571df67874578cc811ca297491470840e3241"
   }, {
     "path" : "src/main/java/com/example/shortener/store/LinkRepository.java",
     "change" : "added",
     "sha256" : "13ce9e5ce5c1b091968b69b3aa2c780c6b59f7035673fbf7448263b633cb989c"
   }, {
-    "path" : "src/test/java/com/example/shortener/HttpIntegrationTest.java",
+    "path" : "src/main/java/com/example/shortener/web/ApiError.java",
     "change" : "added",
-    "sha256" : "c7ff6f1eb7373c8093e63e80a79726a46478d42e9eae284347e0c5e1eb6ad713"
+    "sha256" : "da7305b8e1bb85b29caee5286215c646e1c65d559f2ed499736e9b3a0581cbb2"
   }, {
-    "path" : "src/test/java/com/example/shortener/api/ShortenerApiTest.java",
+    "path" : "src/main/java/com/example/shortener/web/ApiExceptionHandler.java",
     "change" : "added",
-    "sha256" : "b1f126b3896b9bc0d6c6563cc4ac5717d81275aee9e5aa5ac7bc6b0b63805daa"
+    "sha256" : "5afbeadc265d1ccc0d1ebababc186734b6b8a2b4b5864e07ce4c67fa486ec66e"
   }, {
-    "path" : "src/test/java/com/example/shortener/api/TokenBucketRateLimiterTest.java",
+    "path" : "src/main/java/com/example/shortener/web/LinkController.java",
     "change" : "added",
-    "sha256" : "1200366cde6e09a89d39dc32402ea339877f0ffbd35ed0d46c4c65f0dccb55da"
+    "sha256" : "acc6f558b985e798ab9af0d2aea5d8f66cb67a0fe0cb4493165ed7319ebf9691"
+  }, {
+    "path" : "src/main/java/com/example/shortener/web/LinkResponse.java",
+    "change" : "added",
+    "sha256" : "89ef87b23b57ee7e8193c153929430856067c96afcfe85fe0b6dbd8509c3bf4c"
+  }, {
+    "path" : "src/main/java/com/example/shortener/web/RateLimitInterceptor.java",
+    "change" : "added",
+    "sha256" : "c27d9e49b2c6b5617547f273598dab87db9401aeb314effe500f0177b6c465af"
+  }, {
+    "path" : "src/main/java/com/example/shortener/web/RateLimitedException.java",
+    "change" : "added",
+    "sha256" : "fa4d643e367c8f55836653f4fca9ec024ef280973882aff2ba4c01dbfde3bbd2"
+  }, {
+    "path" : "src/main/java/com/example/shortener/web/RequestIdFilter.java",
+    "change" : "added",
+    "sha256" : "858bbf35b40333889adb4e075f40468ce01225a93a46fba12d287323473c34bc"
+  }, {
+    "path" : "src/main/java/com/example/shortener/web/TokenBucketRateLimiter.java",
+    "change" : "added",
+    "sha256" : "a9c61361a1ba94cf10278ec651f5fd7411faef01b9a2f04933790c7f8a01f0c6"
+  }, {
+    "path" : "src/main/java/com/example/shortener/web/WebConfiguration.java",
+    "change" : "added",
+    "sha256" : "5ab1a139ff16c2086accec6330c9bbae6f3f10ea6ec2a5622fa9ad4071897868"
+  }, {
+    "path" : "src/main/resources/application.yml",
+    "change" : "added",
+    "sha256" : "f83585b3d8d4531b70c0403f0d1bf3afd1faf89817070a6851b3578a8f4bff06"
+  }, {
+    "path" : "src/test/java/com/example/shortener/ShortenerApplicationTest.java",
+    "change" : "added",
+    "sha256" : "ddc2cb7630e496bb96f5616edee9580dc302116725e1c416c184e142762a8153"
   }, {
     "path" : "src/test/java/com/example/shortener/config/SettingsTest.java",
     "change" : "added",
-    "sha256" : "41b6d494c298a7e8f94accbe12b7949a4b289aa5cb1d39f2e83022819996e800"
+    "sha256" : "8a5e5831c6e74454c66ddbee741d61a7714cf0bf67e471ec9eca4d65e75fdbb4"
   }, {
     "path" : "src/test/java/com/example/shortener/core/CodeGeneratorTest.java",
     "change" : "added",
-    "sha256" : "580349d3e688d7f6eacc14ad1c59b6d13670172e52695cf32123353147adc317"
+    "sha256" : "ad2d5f7e0a9613782ea30f41ed1431a419e7479116646ad21153859a37f76fbb"
   }, {
     "path" : "src/test/java/com/example/shortener/core/ShortenerServiceTest.java",
     "change" : "added",
-    "sha256" : "17fdac35e50ac7aefe5a51674bcb7e105dcf4e6b32d39652bcf87556e2e339b0"
+    "sha256" : "5ca9ee2f1bbe5e59f43d5fc4576c4b042db580196be21bd38de33812027af14a"
   }, {
     "path" : "src/test/java/com/example/shortener/core/UrlValidatorTest.java",
     "change" : "added",
-    "sha256" : "e68236f3ffc3ddd007e475bc25d7481c6ad8863a01d82c44a2e9f21510bcc817"
+    "sha256" : "ffe0711bd7c5e94e91449bd2f8c89ff8e2663165018ecee25e7f2d9dd7c908c6"
   }, {
     "path" : "src/test/java/com/example/shortener/store/JournalLinkRepositoryTest.java",
     "change" : "added",
-    "sha256" : "bf60ddc39f28f17d04466225fdc13016a76572a7cea44dc029fdd4f4bedff18e"
+    "sha256" : "811084eee116787aade09967bef4776e818aa9f05ed398de8fe1ae458f1d58c4"
+  }, {
+    "path" : "src/test/java/com/example/shortener/web/LinkControllerTest.java",
+    "change" : "added",
+    "sha256" : "54cf36a3241795d5490edb7084599c02081e5aa4bf7d125b6fd3293b52d8bf15"
+  }, {
+    "path" : "src/test/java/com/example/shortener/web/TokenBucketRateLimiterTest.java",
+    "change" : "added",
+    "sha256" : "4fdd6b23a4dd4a51b481fbf5db870d766447c497bfa7831a5667bf3bd8313dea"
   } ],
   "patch" : "CHANGE.patch",
-  "patchSha256" : "c3e3f70e8c08f69bd96b72db7ecd44bbd00e23b81b9c3c661a3ed78433e5de5d",
+  "patchSha256" : "2bd8a0cf9b666abb16e389f329ac6f3b3070ed0faddf11999cd183e2d0867619",
   "apply" : "cd <service module> && git apply -p1 CHANGE.patch"
 }

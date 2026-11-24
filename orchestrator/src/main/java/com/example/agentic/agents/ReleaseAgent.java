@@ -46,7 +46,8 @@ public final class ReleaseAgent implements Agent {
                 f.put("path", (String) row.get("path"));
                 f.put("change", (String) row.get("change"));
                 if (!"deleted".equals(row.get("change"))) {
-                    f.put("sha256", Json.sha256(ctx.workspace().read((String) row.get("path"))));
+                    f.put("sha256", java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256")
+                            .digest(ctx.workspace().readBytes((String) row.get("path")))));
                 }
             }
             String patch = gitPatch(runDir);
@@ -71,6 +72,8 @@ public final class ReleaseAgent implements Agent {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw AgentException.transientFailure("packaging interrupted");
+        } catch (java.security.NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
         }
     }
 

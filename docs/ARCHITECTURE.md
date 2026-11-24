@@ -206,7 +206,7 @@ HIGH findings always require approval, whatever the workflow configuration says.
 |---|---|
 | Transient agent error (I/O, flaky dependency, LLM timeout) | Bounded retries per stage (`maxAttempts` ≤ 10), exponential backoff capped at 5 s. A failed attempt's workspace changes are undone before the retry. |
 | Primary agent broken or unavailable (e.g. LLM output invalid) | `fallbackAgent` with its own retry budget. "Unavailable" (no model configured) is counted separately from failures. |
-| Hung agent | Per-stage timeout → cancel → transient failure. The test JVM is a separate process with a hard kill. |
+| Hung agent | Per-stage timeout → cancel → transient failure. The workspace build (Gradle) is a separate process with a hard kill. |
 | Change set does not apply (code drifted) | Anchors must match exactly once. Otherwise it is a permanent conflict: nothing is written and the change set is validated in full before the first write. |
 | Verification fails (compile/test/scan/readiness) | Exit gate fails → run `FAILED` → workspace restored to baseline. Stages that had succeeded are marked `ROLLED_BACK`. |
 | Policy CRITICAL, operator stop, budget exhausted | Safe-stop: launch nothing new, drain in-flight work, roll back, persist, report. |
@@ -237,7 +237,7 @@ HIGH findings always require approval, whatever the workflow configuration says.
 | `planner` | requirements, index, `human.constraints` | `plan` | Reuse vs build vs exclude. Pulls in prerequisites, serialises shared files, groups tasks into waves. Plan-level policy. |
 | `design` | plan, index, requirements | `design` | API and data changes, impacted files, ripple types (existing code referencing changed types), risks. Requests `design-review`. |
 | `implementation` | plan task, design | `impl.<task>` + workspace change | Recipe → change set → preview → policy → atomic apply with undo log. |
-| `build-test` | workspace | `test_report` | `javac --release 17` in-process, JUnit in a separate JVM with a minimal environment and a timeout. |
+| `build-test` | workspace | `test_report` | Copies the workspace, builds and tests it with the repository's pinned Gradle wrapper in a separate process (timeout, credential-like environment variables removed), parses the JUnit XML. Network/dependency failures are transient; compile errors and failing tests are not. |
 | `security-scan` | workspace diff | `security_report` | Independent scan of the complete code diff (`src/`), separate from the per-task checks. |
 | `docs` | requirements, plan, design, source | `docs/API.md`, `docs/changes/<scenario>.md` | Generated from the source of truth. |
 | `release-readiness` | everything | `release_readiness` | Checklist, requirement → task → test traceability, diff, risks. |
@@ -249,15 +249,25 @@ HIGH findings always require approval, whatever the workflow configuration says.
 
 ```mermaid
 flowchart LR
-  C[HTTP client] --> A[HttpServerAdapter<br/>JDK HttpServer, bounded pool,<br/>body size limit, request id, JSON logs]
-  A --> R[ShortenerApi<br/>pure request→response:<br/>routing, error mapping, rate limit]
+  C[HTTP client] --> F[RequestIdFilter<br/>request id, nosniff,<br/>body size limit 413]
+  F --> I[RateLimitInterceptor<br/>token bucket on create → 429]
+  I --> R[LinkController<br/>@RestController: HTTP ↔ service]
+  R -.errors.-> X[ApiExceptionHandler<br/>@RestControllerAdvice:<br/>uniform JSON errors]
   R --> S[ShortenerService<br/>create / resolve / stats,<br/>idempotency, collision retry]
   S --> V[UrlValidator<br/>scheme, credentials, private IPs,<br/>redirect loops, IDN]
   S --> G[CodeGenerator<br/>CSPRNG base62, alias rules]
   S --> P[LinkRepository port]
   P --> M[InMemoryLinkRepository]
-  P --> J[JournalLinkRepository<br/>write-ahead JSONL, replay,<br/>torn-tail tolerant]
+  P --> J[JournalLinkRepository<br/>write-ahead JSONL, Jackson 3,<br/>replay, torn-tail tolerant]
+  H[StorageHealthIndicator] --> P
+  A[Actuator<br/>/actuator/health/liveness,<br/>/readiness, /metrics] --> H
 ```
+
+The service is a **Spring Boot 4.0** application (Spring Framework 7, Jakarta EE 11, Jackson 3, Java 17).
+The domain (`core/`, `store/`) is plain Java with no Spring annotations. It is wired in `ShortenerConfiguration`,
+so the business rules are unit-tested without a Spring context and would carry over to any framework.
+Configuration is a validated `@ConfigurationProperties` record (`shortener.*` in `application.yml`,
+overridable as `SHORTENER_*` environment variables); an invalid value fails startup.
 
 Design notes, with more in the engineering summary:
 
@@ -266,4 +276,5 @@ Design notes, with more in the engineering summary:
 * **No IP addresses are stored.** The client address is used in memory only, as the rate-limit key. The policy engine flags that use, and a human privacy review approved it.
 * **Idempotency-Key**: a replay returns the original link with 200. Concurrent duplicates create exactly one link; this is tested with 32 threads.
 * **Persistence**: a journal record is written and flushed before the in-memory state changes. A torn last line is skipped on replay. Corruption anywhere else fails startup loudly. Each record carries a format version.
-* The service talks only to the `LinkRepository` port, so a relational or key-value store can replace the journal without touching the domain or the API.
+* The service talks only to the `LinkRepository` port, so a relational or key-value store (e.g. Spring Data JPA on Postgres) can replace the journal without touching the domain or the API.
+* **Operations:** Actuator liveness and readiness probes, where readiness includes the storage health check, so a load balancer stops routing to an instance whose journal is failing. Micrometer counters (`shortener.links.created`, `shortener.redirects`, `shortener.rate_limited`), ECS-format JSON logs with the request id in the MDC, and graceful shutdown.

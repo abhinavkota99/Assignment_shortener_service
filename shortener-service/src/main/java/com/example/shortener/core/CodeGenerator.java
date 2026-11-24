@@ -11,7 +11,7 @@ public class CodeGenerator {
     static final String ALPHABET = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
     private static final Pattern ALIAS = Pattern.compile("^[A-Za-z0-9][A-Za-z0-9_-]{2,31}$");
     /** Aliases must never shadow the service's own routes. */
-    static final Set<String> RESERVED = Set.of("api", "healthz", "readyz", "metrics", "admin", "static", "favicon.ico");
+    static final Set<String> RESERVED = Set.of("api", "actuator", "healthz", "readyz", "metrics", "admin", "static", "error", "favicon.ico");
 
     private final SecureRandom random;
     private final int length;

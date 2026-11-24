@@ -1,16 +1,16 @@
 package com.example.shortener.core;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.example.shortener.config.Settings;
 import com.example.shortener.store.InMemoryLinkRepository;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -20,26 +20,26 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicInteger;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
-public class ShortenerServiceTest {
+class ShortenerServiceTest {
 
     private static final Instant NOW = Instant.parse("2026-11-20T12:00:00Z");
 
     private final MutableClock clock = new MutableClock(NOW);
+    private final Settings settings = Settings.defaults().withBaseUrl("https://sho.rt");
     private InMemoryLinkRepository repo;
     private ShortenerService service;
-    private final Settings settings = Settings.defaults().withBaseUrl("https://sho.rt");
 
-    @Before
-    public void setUp() {
+    @BeforeEach
+    void setUp() {
         repo = new InMemoryLinkRepository();
         service = new ShortenerService(repo, settings, new UrlValidator(settings), new CodeGenerator(7), clock);
     }
 
     @Test
-    public void createsAndResolvesLink() {
+    void createsAndResolvesLink() {
         ShortenerService.CreateResult r = service.create("https://example.com/a", null, null);
         assertTrue(r.created());
         assertEquals(7, r.link().code().length());
@@ -49,18 +49,14 @@ public class ShortenerServiceTest {
     }
 
     @Test
-    public void customAliasConflictIs409() {
+    void customAliasConflictIs409() {
         service.create("https://example.com/a", "promo", null);
-        try {
-            service.create("https://example.com/b", "promo", null);
-            fail("expected conflict");
-        } catch (ServiceException e) {
-            assertEquals(ServiceException.Kind.CONFLICT, e.kind());
-        }
+        ServiceException e = assertThrows(ServiceException.class, () -> service.create("https://example.com/b", "promo", null));
+        assertEquals(ServiceException.Kind.CONFLICT, e.kind());
     }
 
     @Test
-    public void idempotencyKeyReplaysOriginalLink() {
+    void idempotencyKeyReplaysOriginalLink() {
         ShortenerService.CreateResult first = service.create("https://example.com/a", null, "key-1");
         ShortenerService.CreateResult second = service.create("https://example.com/a", null, "key-1");
         assertTrue(first.created());
@@ -70,7 +66,7 @@ public class ShortenerServiceTest {
     }
 
     @Test
-    public void concurrentRequestsWithSameIdempotencyKeyCreateExactlyOneLink() throws Exception {
+    void concurrentRequestsWithSameIdempotencyKeyCreateExactlyOneLink() throws Exception {
         ExecutorService pool = Executors.newFixedThreadPool(8);
         try {
             List<Callable<ShortenerService.CreateResult>> calls = new ArrayList<>();
@@ -92,7 +88,7 @@ public class ShortenerServiceTest {
     }
 
     @Test
-    public void retriesOnCodeCollisionThenFailsSafely() {
+    void retriesOnCodeCollisionThenFailsSafely() {
         AtomicInteger calls = new AtomicInteger();
         CodeGenerator colliding = new CodeGenerator(7) {
             @Override
@@ -111,26 +107,22 @@ public class ShortenerServiceTest {
             }
         };
         ShortenerService stuck = new ShortenerService(repo, settings, new UrlValidator(settings), alwaysSame, clock);
-        try {
-            stuck.create("https://example.com/3", null, null);
-            fail("expected unavailable after bounded retries");
-        } catch (ServiceException e) {
-            assertEquals(ServiceException.Kind.UNAVAILABLE, e.kind());
-        }
+        ServiceException e = assertThrows(ServiceException.class, () -> stuck.create("https://example.com/3", null, null));
+        assertEquals(ServiceException.Kind.UNAVAILABLE, e.kind());
     }
 
     @Test
-    public void resolveWithoutRecordDoesNotCountClick() {
+    void resolveWithoutRecordDoesNotCountClick() {
         String code = service.create("https://example.com/a", null, null).link().code();
         service.resolve(code, null, null, false);
         assertEquals(0, service.stats(code, 30).totalClicks());
     }
 
     @Test
-    public void statsAggregateByDayAndReferrer() {
+    void statsAggregateByDayAndReferrer() {
         String code = service.create("https://example.com/a", null, null).link().code();
         clock.set(NOW.minus(40, ChronoUnit.DAYS));
-        service.resolve(code, "https://old.example", null, true); // outside 30-day window for per-day series
+        service.resolve(code, "https://old.example", null, true); // outside the 30-day per-day window
         clock.set(NOW.minus(1, ChronoUnit.DAYS));
         service.resolve(code, "https://news.example", "UA", true);
         clock.set(NOW);
@@ -146,37 +138,29 @@ public class ShortenerServiceTest {
     }
 
     @Test
-    public void statsValidation() {
+    void statsValidation() {
         String code = service.create("https://example.com/a", null, null).link().code();
         assertNull(service.stats(code, 1).lastClickAt());
         for (int bad : new int[] {0, 366}) {
-            try {
-                service.stats(code, bad);
-                fail();
-            } catch (ServiceException e) {
-                assertEquals(ServiceException.Kind.VALIDATION, e.kind());
-            }
+            ServiceException e = assertThrows(ServiceException.class, () -> service.stats(code, bad));
+            assertEquals(ServiceException.Kind.VALIDATION, e.kind());
         }
     }
 
     @Test
-    public void unknownCodeIsNotFound() {
-        try {
-            service.resolve("nope123", null, null, true);
-            fail();
-        } catch (ServiceException e) {
-            assertEquals(ServiceException.Kind.NOT_FOUND, e.kind());
-        }
+    void unknownCodeIsNotFound() {
+        ServiceException e = assertThrows(ServiceException.class, () -> service.resolve("nope123", null, null, true));
+        assertEquals(ServiceException.Kind.NOT_FOUND, e.kind());
     }
 
     @Test
-    public void headerValuesAreClipped() {
+    void headerValuesAreClipped() {
         assertNull(ShortenerService.clip(""));
         assertEquals(ShortenerService.MAX_HEADER_VALUE_LENGTH, ShortenerService.clip("x".repeat(5000)).length());
-        assertNotEquals(null, ShortenerService.clip("short"));
+        assertEquals("short", ShortenerService.clip("short"));
     }
 
-    /** Test clock that can be moved. */
+    /** Test clock that can be moved. Shared with other tests in this package. */
     static final class MutableClock extends Clock {
         private volatile Instant now;
 
@@ -194,7 +178,7 @@ public class ShortenerServiceTest {
         }
 
         @Override
-        public Clock withZone(java.time.ZoneId zone) {
+        public Clock withZone(ZoneId zone) {
             return this;
         }
 

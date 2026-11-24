@@ -2,10 +2,6 @@ package com.example.shortener.store;
 
 import com.example.shortener.core.ClickEvent;
 import com.example.shortener.core.Link;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.io.BufferedWriter;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -15,7 +11,12 @@ import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.time.Instant;
 import java.util.List;
-import java.util.logging.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 /**
  * Durable repository: an append-only JSON-lines journal replayed into memory at startup.
@@ -29,9 +30,9 @@ import java.util.logging.Logger;
 public final class JournalLinkRepository extends InMemoryLinkRepository {
 
     static final int FORMAT_VERSION = 1;
-    private static final Logger LOG = Logger.getLogger(JournalLinkRepository.class.getName());
+    private static final Logger LOG = LoggerFactory.getLogger(JournalLinkRepository.class);
 
-    private final ObjectMapper json = new ObjectMapper();
+    private final ObjectMapper json = JsonMapper.builder().build(); // Jackson 3: immutable, thread-safe
     private final Path file;
     private final BufferedWriter writer;
     private volatile boolean healthy = true;
@@ -62,9 +63,9 @@ public final class JournalLinkRepository extends InMemoryLinkRepository {
             }
             try {
                 apply(json.readTree(line));
-            } catch (JsonProcessingException | RuntimeException e) {
+            } catch (RuntimeException e) { // Jackson 3 parse errors (JacksonException) are unchecked
                 if (i == lines.size() - 1) {
-                    LOG.warning("ignoring torn final journal record at line " + (i + 1));
+                    LOG.warn("ignoring torn final journal record at line {}", i + 1);
                     continue;
                 }
                 throw new IllegalStateException("corrupt journal " + file + " at line " + (i + 1), e);
@@ -77,12 +78,12 @@ public final class JournalLinkRepository extends InMemoryLinkRepository {
         if (version > FORMAT_VERSION) {
             throw new IllegalStateException("journal record version " + version + " is newer than supported " + FORMAT_VERSION);
         }
-        switch (n.path("type").asText()) {
+        switch (n.path("type").asString()) {
             case "link" -> applyInsert(
-                    new Link(n.get("code").asText(), n.get("targetUrl").asText(),
-                            Instant.parse(n.get("createdAt").asText()), n.path("custom").asBoolean()),
+                    new Link(n.get("code").asString(), n.get("targetUrl").asString(),
+                            Instant.parse(n.get("createdAt").asString()), n.path("custom").asBoolean()),
                     textOrNull(n, "idempotencyKey"));
-            case "click" -> applyClick(new ClickEvent(n.get("code").asText(), Instant.parse(n.get("at").asText()),
+            case "click" -> applyClick(new ClickEvent(n.get("code").asString(), Instant.parse(n.get("at").asString()),
                     textOrNull(n, "referrer"), textOrNull(n, "userAgent")));
             default -> throw new IllegalStateException("unknown journal record type: " + n.path("type"));
         }
@@ -120,7 +121,7 @@ public final class JournalLinkRepository extends InMemoryLinkRepository {
 
     private void append(ObjectNode n) {
         try {
-            writer.write(json.writeValueAsString(n));
+            writer.write(json.writeValueAsString(n)); // JacksonException is unchecked in Jackson 3
             writer.newLine();
             writer.flush();
             healthy = true;
@@ -132,7 +133,7 @@ public final class JournalLinkRepository extends InMemoryLinkRepository {
 
     private static String textOrNull(JsonNode n, String field) {
         JsonNode v = n.get(field);
-        return v == null || v.isNull() ? null : v.asText();
+        return v == null || v.isNull() ? null : v.asString();
     }
 
     @Override

@@ -1,74 +1,74 @@
-package com.example.shortener.api;
+package com.example.shortener.web;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
+import static org.hamcrest.Matchers.nullValue;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.example.shortener.config.Settings;
 import com.example.shortener.core.ShortenerService;
 import com.example.shortener.store.InMemoryLinkRepository;
-import java.nio.charset.StandardCharsets;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
-import java.util.Map;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.http.MediaType;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.ResultActions;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
-public class LinkExpirationApiTest {
+class LinkExpirationApiTest {
 
-    private ShortenerApi api;
+    private MockMvc mvc;
 
-    @Before
-    public void setUp() {
+    @BeforeEach
+    void setUp() {
         Settings settings = Settings.defaults().withBaseUrl("https://sho.rt");
-        api = new ShortenerApi(new ShortenerService(new InMemoryLinkRepository(), settings), new TokenBucketRateLimiter(100, 100));
+        mvc = MockMvcBuilders
+                .standaloneSetup(new LinkController(new ShortenerService(new InMemoryLinkRepository(), settings), new SimpleMeterRegistry()))
+                .setControllerAdvice(new ApiExceptionHandler())
+                .build();
+    }
+
+    private ResultActions create(String json) throws Exception {
+        return mvc.perform(post("/api/v1/links").contentType(MediaType.APPLICATION_JSON).content(json));
     }
 
     @Test
-    public void expiresAtRoundTripsThroughTheContract() {
+    void expiresAtRoundTripsThroughTheContract() throws Exception {
         String expiry = Instant.now().plus(1, ChronoUnit.DAYS).truncatedTo(ChronoUnit.SECONDS).toString();
-        ApiResponse created = create("{\"url\":\"https://example.com\",\"alias\":\"promo-1\",\"expiresAt\":\"" + expiry + "\"}");
-        assertEquals(201, created.status());
-        assertEquals(expiry, body(created).get("expiresAt"));
-        assertEquals(expiry, body(api.handle(new ApiRequest("GET", "/api/v1/links/promo-1", null, null, "c"))).get("expiresAt"));
-        assertEquals(302, api.handle(new ApiRequest("GET", "/promo-1", null, null, "c")).status());
+        create("{\"url\":\"https://example.com\",\"alias\":\"promo-1\",\"expiresAt\":\"" + expiry + "\"}")
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.expiresAt").value(expiry));
+        mvc.perform(get("/api/v1/links/promo-1")).andExpect(jsonPath("$.expiresAt").value(expiry));
+        mvc.perform(get("/promo-1")).andExpect(status().isFound());
     }
 
     @Test
-    public void linksWithoutExpiryExposeNull() {
-        ApiResponse created = create("{\"url\":\"https://example.com\"}");
-        assertEquals(201, created.status());
-        assertNull(body(created).get("expiresAt"));
+    void linksWithoutExpiryExposeNull() throws Exception {
+        create("{\"url\":\"https://example.com\"}")
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.expiresAt").value(nullValue()));
     }
 
     @Test
-    public void invalidExpiryIsRejected() {
-        assertError(create("{\"url\":\"https://example.com\",\"expiresAt\":\"tomorrow\"}"), 400, "validation_failed");
-        assertError(create("{\"url\":\"https://example.com\",\"expiresAt\":\"2001-01-01T00:00:00Z\"}"), 400, "validation_failed");
-        assertError(create("{\"url\":\"https://example.com\",\"expiresAt\":12345}"), 400, "validation_failed");
+    void invalidExpiryIsRejected() throws Exception {
+        for (String body : new String[] {
+                "{\"url\":\"https://example.com\",\"expiresAt\":\"tomorrow\"}",
+                "{\"url\":\"https://example.com\",\"expiresAt\":\"2001-01-01T00:00:00Z\"}",
+                "{\"url\":\"https://example.com\",\"expiresAt\":12345}"}) {
+            create(body).andExpect(status().isBadRequest()).andExpect(jsonPath("$.error.code").value("validation_failed"));
+        }
     }
 
     @Test
-    public void expiredLinkReturns410() throws Exception {
+    void expiredLinkReturns410ButStatsRemain() throws Exception {
         String soon = Instant.now().plus(1, ChronoUnit.SECONDS).toString();
-        assertEquals(201, create("{\"url\":\"https://example.com\",\"alias\":\"flash\",\"expiresAt\":\"" + soon + "\"}").status());
+        create("{\"url\":\"https://example.com\",\"alias\":\"flash\",\"expiresAt\":\"" + soon + "\"}").andExpect(status().isCreated());
         Thread.sleep(1_200);
-        assertError(api.handle(new ApiRequest("GET", "/flash", null, null, "c")), 410, "gone");
-        assertEquals(200, api.handle(new ApiRequest("GET", "/api/v1/links/flash/stats", null, null, "c")).status());
-    }
-
-    private ApiResponse create(String json) {
-        return api.handle(new ApiRequest("POST", "/api/v1/links", Map.of("Content-Type", "application/json"),
-                json.getBytes(StandardCharsets.UTF_8), "client"));
-    }
-
-    @SuppressWarnings("unchecked")
-    private static Map<String, Object> body(ApiResponse r) {
-        return (Map<String, Object>) r.body();
-    }
-
-    @SuppressWarnings("unchecked")
-    private static void assertError(ApiResponse r, int status, String code) {
-        assertEquals(status, r.status());
-        assertEquals(code, ((Map<String, Object>) body(r).get("error")).get("code"));
+        mvc.perform(get("/flash")).andExpect(status().isGone()).andExpect(jsonPath("$.error.code").value("gone"));
+        mvc.perform(get("/api/v1/links/flash/stats")).andExpect(status().isOk());
     }
 }

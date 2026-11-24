@@ -102,4 +102,24 @@ public class WorkspaceTest {
             assertTrue(e.getMessage().contains("already exists"));
         }
     }
+
+    @Test
+    public void ignoresOsMetadataAndDiffsBinaryFilesSafely() throws Exception {
+        java.nio.file.Path src = tmp.newFolder("baseline-src").toPath();
+        java.nio.file.Files.createDirectories(src.resolve("src"));
+        java.nio.file.Files.writeString(src.resolve("src/A.java"), "class A {}");
+        java.nio.file.Files.write(src.resolve(".DS_Store"), new byte[] {0, (byte) 0xff, (byte) 0xfe, 1});
+        java.nio.file.Files.write(src.resolve("src/.DS_Store"), new byte[] {(byte) 0xc3, 0x28});
+        Workspace copy = new Workspace(tmp.getRoot().toPath().resolve("copy"), tmp.getRoot().toPath().resolve("copy-state"));
+        copy.initFrom(src);
+        assertEquals(List.of("src/A.java"), copy.files());
+
+        copy.snapshot("base");
+        java.nio.file.Files.write(copy.root().resolve("src/logo.png"), new byte[] {(byte) 0x89, 'P', 'N', 'G', 0, (byte) 0xff});
+        var diff = copy.diffSummary("base");
+        assertEquals(1, diff.size());
+        assertEquals(Boolean.TRUE, diff.get(0).get("binary"));
+        assertFalse(copy.isText("src/logo.png"));
+        assertTrue(copy.isText("src/A.java"));
+    }
 }

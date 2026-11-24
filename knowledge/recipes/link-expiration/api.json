@@ -1,41 +1,47 @@
 {
-  "description": "expiresAt request/response field, ISO-8601 parsing, 410 documented in route table",
+  "description": "expiresAt request/response field (controller + response record), ISO-8601 parsing, 410 documented in route table",
   "ops": [
     {
       "op": "patch",
-      "path": "src/main/java/com/example/shortener/api/ShortenerApi.java",
+      "path": "src/main/java/com/example/shortener/web/LinkController.java",
       "find": " *   GET   /{code}                     redirect and record a click        302, 404\n *   HEAD  /{code}                     redirect, no click recorded        302, 404\n",
       "replace": " *   GET   /{code}                     redirect and record a click        302, 404, 410 (expired)\n *   HEAD  /{code}                     redirect, no click recorded        302, 404, 410 (expired)\n"
     },
     {
       "op": "patch",
-      "path": "src/main/java/com/example/shortener/api/ShortenerApi.java",
-      "find": "import java.nio.charset.StandardCharsets;\n",
-      "replace": "import java.nio.charset.StandardCharsets;\nimport java.time.Instant;\nimport java.time.format.DateTimeParseException;\n"
+      "path": "src/main/java/com/example/shortener/web/LinkController.java",
+      "find": "import java.util.Map;\n",
+      "replace": "import java.time.Instant;\nimport java.time.format.DateTimeParseException;\nimport java.util.Map;\n"
     },
     {
       "op": "patch",
-      "path": "src/main/java/com/example/shortener/api/ShortenerApi.java",
+      "path": "src/main/java/com/example/shortener/web/LinkController.java",
       "find": "Set.of(\"url\", \"alias\");",
       "replace": "Set.of(\"url\", \"alias\", \"expiresAt\");"
     },
     {
       "op": "patch",
-      "path": "src/main/java/com/example/shortener/api/ShortenerApi.java",
-      "find": "        ShortenerService.CreateResult result = service.create(url, alias, req.header(\"idempotency-key\"));",
-      "replace": "        Instant expiresAt = parseInstant(textField(body, \"expiresAt\"));\n        ShortenerService.CreateResult result = service.create(url, alias, req.header(\"idempotency-key\"), expiresAt);"
+      "path": "src/main/java/com/example/shortener/web/LinkController.java",
+      "find": "        ShortenerService.CreateResult result = service.create(url, alias, idempotencyKey);",
+      "replace": "        Instant expiresAt = parseInstant(text(body, \"expiresAt\"));\n        ShortenerService.CreateResult result = service.create(url, alias, idempotencyKey, expiresAt);"
     },
     {
       "op": "patch",
-      "path": "src/main/java/com/example/shortener/api/ShortenerApi.java",
-      "find": "    private Map<String, Object> linkBody(Link link) {",
-      "replace": "    private static Instant parseInstant(String value) {\n        if (value == null) {\n            return null;\n        }\n        try {\n            return Instant.parse(value);\n        } catch (DateTimeParseException e) {\n            throw ServiceException.validation(\"expiresAt must be an ISO-8601 UTC timestamp, e.g. 2026-12-31T23:59:59Z\");\n        }\n    }\n\n    private Map<String, Object> linkBody(Link link) {"
+      "path": "src/main/java/com/example/shortener/web/LinkController.java",
+      "find": "    private LinkResponse response(Link link) {",
+      "replace": "    private static Instant parseInstant(String value) {\n        if (value == null) {\n            return null;\n        }\n        try {\n            return Instant.parse(value);\n        } catch (DateTimeParseException e) {\n            throw ServiceException.validation(\"expiresAt must be an ISO-8601 UTC timestamp, e.g. 2026-12-31T23:59:59Z\");\n        }\n    }\n\n    private LinkResponse response(Link link) {"
     },
     {
       "op": "patch",
-      "path": "src/main/java/com/example/shortener/api/ShortenerApi.java",
-      "find": "        m.put(\"custom\", link.custom());\n",
-      "replace": "        m.put(\"custom\", link.custom());\n        m.put(\"expiresAt\", link.expiresAt() == null ? null : link.expiresAt().toString());\n"
+      "path": "src/main/java/com/example/shortener/web/LinkResponse.java",
+      "find": "public record LinkResponse(String code, String shortUrl, String targetUrl, String createdAt, boolean custom) {",
+      "replace": "public record LinkResponse(String code, String shortUrl, String targetUrl, String createdAt, boolean custom, String expiresAt) {"
+    },
+    {
+      "op": "patch",
+      "path": "src/main/java/com/example/shortener/web/LinkResponse.java",
+      "find": "return new LinkResponse(link.code(), shortUrl, link.targetUrl(), link.createdAt().toString(), link.custom());",
+      "replace": "return new LinkResponse(link.code(), shortUrl, link.targetUrl(), link.createdAt().toString(), link.custom(),\n                link.expiresAt() == null ? null : link.expiresAt().toString());"
     }
   ]
 }

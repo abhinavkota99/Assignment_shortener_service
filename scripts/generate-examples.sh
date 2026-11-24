@@ -33,5 +33,6 @@ cp runs/ambiguous/release/CHANGE.patch examples/runs/ambiguous.CHANGE.patch
 cp runs/greenfield/release/MANIFEST.json examples/runs/greenfield.MANIFEST.json
 cp runs/greenfield/workspace/docs/API.md examples/runs/greenfield.generated-API.md
 "$A" metrics 2>&1 | clean > examples/runs/metrics-aggregate.json
-for f in examples/runs/*.md examples/runs/*.json; do sed -i "s#$ROOT/##g" "$f"; done
+# portable in-place edit (GNU and BSD/macOS): perl instead of sed -i
+for f in examples/runs/*.md examples/runs/*.json; do ROOT="$ROOT" perl -pi -e 's/\Q$ENV{ROOT}\E\///g' "$f"; done
 echo "examples regenerated"

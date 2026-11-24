@@ -22,6 +22,10 @@ tasks.named('run') {
 
 tasks.withType(Test).configureEach {
     workingDir = rootProject.projectDir
-    // end-to-end scenario tests compile and run a full service test suite in a subprocess
+    // End-to-end scenario tests build and test a generated Spring Boot workspace with Gradle (needs the
+    // dependency cache or network). -PskipE2E runs only the unit and engine tests.
     maxHeapSize = '1g'
+    if (project.hasProperty('skipE2E')) {
+        exclude '**/ScenarioEndToEndTest*'
+    }
 }

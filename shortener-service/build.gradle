@@ -1,20 +1,38 @@
 plugins {
-    id 'application'
+    id 'java'
+    id 'org.springframework.boot' version '4.0.8'
 }
 
-description = 'URL shortener HTTP service (JDK HTTP server, journal-backed persistence)'
+description = 'URL shortener service (Spring Boot 4, Java 17)'
+group = 'com.example'
+version = '1.0.0'
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
+}
+
+repositories {
+    mavenCentral()
+}
 
 dependencies {
-    implementation libs.jackson
-    testImplementation libs.junit
+    implementation platform(org.springframework.boot.gradle.plugin.SpringBootPlugin.BOM_COORDINATES)
+    implementation 'org.springframework.boot:spring-boot-starter-webmvc'
+    implementation 'org.springframework.boot:spring-boot-starter-jackson'
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
+
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
-application {
-    mainClass = 'com.example.shortener.ShortenerApplication'
-    // one structured (JSON) log line per event
-    applicationDefaultJvmArgs = ['-Djava.util.logging.SimpleFormatter.format=%5$s%6$s%n']
+tasks.withType(JavaCompile).configureEach {
+    options.release = 17
+    options.encoding = 'UTF-8'
+    options.compilerArgs += ['-Xlint:all', '-Xlint:-processing', '-Xlint:-serial']
 }
 
-jar {
-    manifest { attributes 'Main-Class': application.mainClass }
+tasks.named('test') {
+    useJUnitPlatform()
+    testLogging { events 'failed'; exceptionFormat = 'full' }
 }

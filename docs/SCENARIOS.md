@@ -26,15 +26,16 @@ Committed outputs for every run below are in [`examples/runs/`](../examples/runs
 * Four organisational engineering standards are added as NFRs.
 * No blocking ambiguity is found.
 
-**Decomposition.** The workspace is empty, so nothing is reused. The plan has 10 tasks in 5 dependency waves, with the critical path being 5 stages long:
+**Decomposition.** The workspace is empty, so nothing is reused. The plan has 11 tasks in 6 dependency waves, with the critical path being 6 stages long:
 
 | Wave | Tasks (run in parallel) |
 |---|---|
-| 1 | `T-domain`, `T-config`, `T-codes`, `T-ratelimit` |
-| 2 | `T-store` (after domain), `T-validation` (after config, domain) |
-| 3 | `T-service` (after store, validation, codes, config), `T-journal` (after store) |
-| 4 | `T-api` (after service, ratelimit) |
-| 5 | `T-bootstrap` (after api, journal) |
+| 1 | `T-build` (Spring Boot 4 `build.gradle` + `application.yml`), `T-domain`, `T-codes`, `T-ratelimit` |
+| 2 | `T-config` (after build), `T-store` (after domain) |
+| 3 | `T-validation` (after config, domain), `T-journal` (after store, build) |
+| 4 | `T-service` (after store, validation, codes, config) |
+| 5 | `T-api`: controller, advice, interceptor, filter (after service, ratelimit, build) |
+| 6 | `T-bootstrap`: Spring wiring, health indicator, application, end-to-end test (after api, journal) |
 
 Each capability is traced to the tasks that deliver it. For example, *click analytics* is delivered by `T-service` and `T-api`. The `plan-traceable` gate fails the run if any capability has no task, no existing implementation and no recorded exclusion. An earlier version of the planner did fail this gate, which is how the multi-capability traceability was introduced.
 
@@ -43,18 +44,19 @@ Each capability is traced to the tasks that deliver it. For example, *click anal
 * `requirements` ∥ `codebase_analysis`.
 * The implement fan-out runs each wave concurrently.
 * `build_test` ∥ `security_scan` ∥ `docs`, then the `release_readiness` join.
-* **Three human checkpoints:**
+* **Four human checkpoints:**
   1. `design/design-review`: a new public API and data format.
-  2. `implement:T-api/privacy-review`: the policy engine flagged `getRemoteAddress()` in `HttpServerAdapter`. The approver recorded that the IP is used in memory only as the rate-limit key.
-  3. `release/release`: a pre-action approval.
+  2. `implement:T-build/change-control`: `build.gradle` is a change-controlled file (dependencies), so the new build needs sign-off.
+  3. `implement:T-api/privacy-review`: the policy engine flagged `clientIp` in `RateLimitInterceptor`. The approver recorded that the IP is used in memory only as the rate-limit key.
+  4. `release/release`: a pre-action approval.
 
 **Validation:**
 
-* The full suite of 36 tests is compiled with `--release 17` and run in an isolated JVM, all passing.
-* The security scan of 26 source files finds 0 critical and 1 high finding, the approved IP use.
+* The generated Spring Boot workspace is built with Gradle in an isolated copy, and all 49 tests pass, including the full-context test on a random port.
+* The security scan of 33 source files finds 0 critical and 1 high finding, the approved IP use.
 * All 7 release checks pass, and the traceability matrix covers all 8 capabilities.
-* The release is a 28-file patch plus a hash manifest.
-* The audit chain of 109 entries verifies.
+* The release is a 36-file patch plus a hash manifest.
+* The audit chain of 118 entries verifies.
 
 Outputs:
 
@@ -74,18 +76,18 @@ Outputs:
 
 The workspace starts as a copy of `shortener-service/`.
 
-**Codebase reasoning.** `codebase_analysis` indexes 26 types, the 36 existing tests and the HTTP routes. It builds the type-level reference graph and finds 8 capabilities already present from their catalog evidence. The planner therefore **reuses** link creation, redirect and click analytics, and plans **only** the new capability:
+**Codebase reasoning.** `codebase_analysis` indexes the existing Spring Boot code: its types, the 36 `@Test` methods and the HTTP routes. It builds the type-level reference graph and finds 8 capabilities already present from their catalog evidence. The planner therefore **reuses** link creation, redirect and click analytics, and plans **only** the new capability:
 
 | Wave | Task | Touches |
 |---|---|---|
 | 1 | `T-expiry-domain` | `Link` (optional `expiresAt`, source-compatible constructor kept), `ServiceException` (`GONE`), `ShortenerService` (validate & enforce) |
-| 2 | `T-expiry-store` ∥ `T-expiry-api` | `JournalLinkRepository` (optional field, old records still load) ∥ `ShortenerApi` (request/response field, ISO-8601 parsing, 410 in route table) |
+| 2 | `T-expiry-store` ∥ `T-expiry-api` | `JournalLinkRepository` (optional field, old records still load) ∥ `LinkController` + `LinkResponse` (request/response field, ISO-8601 parsing, 410 in route table) |
 | 3 | `T-expiry-tests` | 3 new test classes: service, API, journal backward-compatibility |
 
 **Impact analysis.** The design stage reports:
 
-* 5 changed existing types.
-* A **ripple set** of 10 existing types and tests that reference them, for example `HttpServerAdapter`, `ShortenerApplication` and `ShortenerServiceTest`. These are why the full suite is run rather than only the new tests.
+* 6 changed existing types: `Link`, `ServiceException`, `ShortenerService`, `JournalLinkRepository`, `LinkController`, `LinkResponse`.
+* A **ripple set** of 9 existing types and tests that reference them, for example `ShortenerConfiguration`, `ApiExceptionHandler` and `LinkControllerTest`. These are why the full suite is run rather than only the new tests.
 * API changes: 3, all additive.
 * Data change: 1 additive journal field. The format version is unchanged because old readers ignore the field and new readers default it.
 * Two risks: clock skew, and cached redirects. The second is mitigated by the existing `no-cache` header.
@@ -94,10 +96,9 @@ Because the contract and the data format change, the design agent requests `desi
 
 **Validation:**
 
-* 46 tests run: the 36 existing ones (the `no-test-regression` gate) plus 10 new.
-* The security scan covers 8 changed source files.
-* The release is a 10-file `CHANGE.patch`.
-* **Independently verified:** the patch applies cleanly with `git apply -p1` to a fresh copy of `shortener-service/`, and the module's real Gradle build (`-Xlint:all -Werror`) passes all 46 tests.
+* 59 tests run: the 49 existing ones (the `no-test-regression` gate) plus 10 new: service, MockMvc API and journal-compatibility tests.
+* The security scan covers 9 changed source files.
+* The release is an 11-file `CHANGE.patch`, ready for `git apply -p1` in `shortener-service/`.
 
 **Controlled autonomy in practice.** Run without an approvals file, the run pauses at `design/design-review`. It writes `APPROVALS-PENDING.md` and exits with code 3. `agentic resume <id> --approvals scenarios/brownfield/approvals.json` continues from the exact point it stopped. See [`approval-pending.*`](../examples/runs/).
 
@@ -135,8 +136,8 @@ Outputs:
 2. The planner reuses existing link creation and click analytics, and plans `T-denylist`, `T-denylist-wiring` and `T-geo`. `T-geo` is tagged `personal-data`.
 3. **Plan-level policy** raises a `privacy-review` before any code exists. The DPO **rejects** it: *"needs client IP processing; not allowed without a DPIA"*.
 4. The rejection is recorded as a `human.constraints` artifact. Planning is an adaptable phase, so the planner **re-executes**, excludes `geo_analytics` with the DPO's reason, and the graph is re-expanded with **2 tasks instead of 3**. Traceability still passes because the exclusion is a recorded decision, not a silent drop.
-5. The design review is approved. `T-denylist` adds a `DenylistUrlValidator` through the existing `checkHost` extension point; subdomains are blocked, and look-alike domains are not. `T-denylist-wiring` reads `SHORTENER_BLOCKED_HOSTS` in the composition root.
-6. 40 tests pass (36 existing + 4 new), the release is approved, and a 5-file patch is produced.
+5. The design review is approved. `T-denylist` adds a `DenylistUrlValidator` through the existing `checkHost` extension point; subdomains are blocked, and look-alike domains are not. `T-denylist-wiring` changes the `urlValidator` bean in `ShortenerConfiguration` to read `shortener.blocked-hosts` (env `SHORTENER_BLOCKED_HOSTS`).
+6. 56 tests pass (49 existing + 7 new), the release is approved, and a 5-file patch is produced.
 
 The decision lineage in [`ambiguous.REPORT.md`](../examples/runs/ambiguous.REPORT.md) shows the whole chain:
 
@@ -163,4 +164,4 @@ Aggregate metrics over the example runs ([`metrics-aggregate.json`](../examples/
 * success rate 0.8 over 5 finished runs (the corrupt-change demo fails by design; 1 run is paused);
 * rollback frequency 0.2;
 * MTTR ≈ 0.5 s;
-* p50 end-to-end ≈ 3 s, dominated by compiling and running the test suite.
+* p50 end-to-end ≈ 5.3 s, p95 ≈ 6.9 s, dominated by the Gradle build and the Spring Boot test suite (with a warm Gradle cache).

@@ -65,7 +65,8 @@ public class ScenarioEndToEndTest {
         JsonNode tests = artifact("gf", "test_report");
         assertTrue(tests.path("testsRun").asInt() >= 30);
         assertEquals(0, tests.path("failures").asInt());
-        assertEquals(10, artifact("gf", "plan").path("tasks").size());
+        assertEquals(11, artifact("gf", "plan").path("tasks").size());
+        assertTrue("the build file is change-controlled", st.stage("implement:T-build").approval().contains("change-control"));
         assertTrue("privacy review of transient IP use was required", st.stage("implement:T-api").approval().contains("privacy-review"));
         assertTrue(Files.exists(tmp.getRoot().toPath().resolve("gf/release/CHANGE.patch")));
         assertTrue(AuditLog.verify(tmp.getRoot().toPath().resolve("gf/audit.jsonl")).valid());
@@ -80,7 +81,7 @@ public class ScenarioEndToEndTest {
         assertEquals(4, plan.path("tasks").size());
         assertTrue(plan.path("alreadySatisfied").size() >= 3);
         JsonNode design = artifact("bf", "design");
-        assertTrue(design.path("rippleTypes").toString().contains("HttpServerAdapter"));
+        assertTrue(design.path("rippleTypes").toString().contains("ShortenerConfiguration"));
         JsonNode tests = artifact("bf", "test_report");
         assertTrue("existing suite plus new tests", tests.path("testsRun").asInt() > artifact("bf", "codebase_index").path("testMethods").asInt());
         assertEquals(1, st.counter("retries"));

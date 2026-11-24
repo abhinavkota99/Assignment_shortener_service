@@ -4,8 +4,8 @@
 |---|---|
 | Scenario | `brownfield-link-expiration` |
 | Status | **FAILED** - build_test: exit gate failed: tests-green=FAIL (compilation failed) |
-| Started | 2026-11-23T23:16:36.087Z |
-| Active time | 665 ms (excludes time paused for humans) |
+| Started | 2026-11-24T04:17:44.471Z |
+| Active time | 1094 ms (excludes time paused for humans) |
 | Resumes | 0 |
 | Audit chain | verified, 71 entries (hash chain intact) |
 
@@ -40,7 +40,7 @@ Interpreter: `rules` - 4 capabilities, 7 functional requirements, 5 NFRs, 0 ambi
 |---|---|---|---|
 | `T-expiry-domain` Expiry in domain model and service | link_expiration | [] | 3 |
 | `T-expiry-store` Persist expiry in the journal (backward compatible) | link_expiration | ["T-expiry-domain"] | 1 |
-| `T-expiry-api` expiresAt in the HTTP contract, 410 Gone | link_expiration | ["T-expiry-domain"] | 1 |
+| `T-expiry-api` expiresAt in the HTTP contract, 410 Gone | link_expiration | ["T-expiry-domain"] | 2 |
 | `T-expiry-tests` Expiry tests (service, API, journal compatibility) | link_expiration | ["T-expiry-domain","T-expiry-store","T-expiry-api"] | 3 |
 
 Parallel waves: [["T-expiry-domain"],["T-expiry-store","T-expiry-api"],["T-expiry-tests"]]
@@ -53,9 +53,9 @@ Parallel waves: [["T-expiry-domain"],["T-expiry-store","T-expiry-api"],["T-expir
 
 ## 3. Design and impact
 
-- Impacted files: 8
-- Changed existing types: ["ShortenerApi","Link","ServiceException","ShortenerService","JournalLinkRepository"]
-- Ripple (re-verified) types: ["HttpServerAdapter","ShortenerApiTest","ShortenerApplication","InMemoryLinkRepository","JournalLinkRepositoryTest","LinkRepository","ShortenerServiceTest","UrlValidator","UrlValidatorTest","HttpIntegrationTest"]
+- Impacted files: 9
+- Changed existing types: ["Link","ServiceException","ShortenerService","JournalLinkRepository","LinkController","LinkResponse"]
+- Ripple (re-verified) types: ["InMemoryLinkRepository","JournalLinkRepositoryTest","LinkRepository","ApiExceptionHandler","ShortenerServiceTest","UrlValidator","UrlValidatorTest","LinkControllerTest","ShortenerConfiguration"]
 
 **API changes**
 
@@ -76,18 +76,18 @@ Parallel waves: [["T-expiry-domain"],["T-expiry-store","T-expiry-api"],["T-expir
 
 | Stage | Phase | Status | Attempts | Agent | Duration | Notes |
 |---|---|---|---|---|---|---|
-| `requirements` | REQUIREMENTS | SUCCEEDED | 2 | requirements-rules | 83 ms | fallback; recovered from: no LLM configured (offline mode);  |
-| `codebase_analysis` | ANALYSIS | SUCCEEDED | 1 | codebase-analysis | 112 ms |  |
-| `plan` | PLANNING | SUCCEEDED | 1 | planner | 30 ms |  |
-| `design` | DESIGN | SUCCEEDED | 1 | design | 17 ms | approved: design-review by tech-lead.alice;  |
-| `implement:T-expiry-domain` | IMPLEMENTATION | ROLLED_BACK | 1 | implementation | 31 ms |  |
-| `implement:T-expiry-store` | IMPLEMENTATION | ROLLED_BACK | 1 | implementation | 27 ms |  |
-| `implement:T-expiry-api` | IMPLEMENTATION | ROLLED_BACK | 1 | implementation | 36 ms |  |
-| `implement:T-expiry-tests` | IMPLEMENTATION | ROLLED_BACK | 1 | implementation | 8 ms |  |
-| `implement` | IMPLEMENTATION | ROLLED_BACK | 1 | join | 7 ms |  |
-| `build_test` | VERIFICATION | FAILED | 1 | build-test | 358 ms | error: exit gate failed: tests-green=FAIL (compilation failed);  |
-| `security_scan` | VERIFICATION | SUCCEEDED | 1 | security-scan | 41 ms |  |
-| `docs` | DOCUMENTATION | ROLLED_BACK | 1 | docs | 11 ms |  |
+| `requirements` | REQUIREMENTS | SUCCEEDED | 2 | requirements-rules | 57 ms | fallback; recovered from: no LLM configured (offline mode);  |
+| `codebase_analysis` | ANALYSIS | SUCCEEDED | 1 | codebase-analysis | 80 ms |  |
+| `plan` | PLANNING | SUCCEEDED | 1 | planner | 17 ms |  |
+| `design` | DESIGN | SUCCEEDED | 1 | design | 14 ms | approved: design-review by tech-lead.alice;  |
+| `implement:T-expiry-domain` | IMPLEMENTATION | ROLLED_BACK | 1 | implementation | 26 ms |  |
+| `implement:T-expiry-store` | IMPLEMENTATION | ROLLED_BACK | 1 | implementation | 8 ms |  |
+| `implement:T-expiry-api` | IMPLEMENTATION | ROLLED_BACK | 1 | implementation | 14 ms |  |
+| `implement:T-expiry-tests` | IMPLEMENTATION | ROLLED_BACK | 1 | implementation | 7 ms |  |
+| `implement` | IMPLEMENTATION | ROLLED_BACK | 1 | join | 2 ms |  |
+| `build_test` | VERIFICATION | FAILED | 1 | build-test | 881 ms | error: exit gate failed: tests-green=FAIL (compilation failed);  |
+| `security_scan` | VERIFICATION | SUCCEEDED | 1 | security-scan | 48 ms |  |
+| `docs` | DOCUMENTATION | ROLLED_BACK | 1 | docs | 9 ms |  |
 | `release_readiness` | RELEASE | SKIPPED | 0 |  |  |  |
 | `release` | RELEASE | SKIPPED | 0 |  |  |  |
 
@@ -97,16 +97,16 @@ Parallel waves: [["T-expiry-domain"],["T-expiry-store","T-expiry-api"],["T-expir
 |---|---|---|---|---|---|
 | D-1 | requirements | agent:requirements-rules | Interpreted requirement as capabilities [link_creation, redirect, click_analytics, link_expiration] | interpreter=rules; {link_creation=stated (matched 'short link'), redirect=stated (matched 'redirect'), click_analytics=stated (matched 'analytics'), link_expiration=stated (matched 'expire')} | [human.clarifications#absent] |
 | D-2 | requirements | agent:requirements-rules | Interpreted vague quality 'fast' as a measurable target | Redirect p99 latency must not regress versus the current release (measured on the same hardware). | [human.clarifications#absent] |
-| D-3 | plan | agent:planner | Reuse existing capability 'link_creation' | codebase analysis found its evidence; rebuilding would add risk | [requirements#72d73a7ddd, human.constraints#absent, codebase_index#582ea7e0bf] |
-| D-4 | plan | agent:planner | Reuse existing capability 'redirect' | codebase analysis found its evidence; rebuilding would add risk | [requirements#72d73a7ddd, human.constraints#absent, codebase_index#582ea7e0bf] |
-| D-5 | plan | agent:planner | Reuse existing capability 'click_analytics' | codebase analysis found its evidence; rebuilding would add risk | [requirements#72d73a7ddd, human.constraints#absent, codebase_index#582ea7e0bf] |
-| D-6 | plan | agent:planner | Decomposed into 4 tasks / 3 parallel waves | waves=[[T-expiry-domain], [T-expiry-store, T-expiry-api], [T-expiry-tests]] | [requirements#72d73a7ddd, human.constraints#absent, codebase_index#582ea7e0bf] |
-| D-7 | design | agent:design | Impact limited to [ShortenerApi, Link, ServiceException, ShortenerService, JournalLinkRepository] with ripple [HttpServerAdapter, ShortenerApiTest, ShortenerApplication, InMemoryLinkRepository, JournalLinkRepositoryTest, LinkRepository, ShortenerServiceTest, UrlValidator, UrlValidatorTest, HttpIntegrationTest] | type-level reference graph from codebase_index | [requirements#72d73a7ddd, codebase_index#582ea7e0bf, plan#276e2eeb98] |
-| D-8 | design | human:tech-lead.alice | Approved design/design-review | Additive API change (optional expiresAt, new 410) and additive journal field; old clients and old data unaffected. | [requirements#72d73a7ddd, plan#276e2eeb98, codebase_index#582ea7e0bf] |
+| D-3 | plan | agent:planner | Reuse existing capability 'link_creation' | codebase analysis found its evidence; rebuilding would add risk | [requirements#72d73a7ddd, codebase_index#64d7e2257d, human.constraints#absent] |
+| D-4 | plan | agent:planner | Reuse existing capability 'redirect' | codebase analysis found its evidence; rebuilding would add risk | [requirements#72d73a7ddd, codebase_index#64d7e2257d, human.constraints#absent] |
+| D-5 | plan | agent:planner | Reuse existing capability 'click_analytics' | codebase analysis found its evidence; rebuilding would add risk | [requirements#72d73a7ddd, codebase_index#64d7e2257d, human.constraints#absent] |
+| D-6 | plan | agent:planner | Decomposed into 4 tasks / 3 parallel waves | waves=[[T-expiry-domain], [T-expiry-store, T-expiry-api], [T-expiry-tests]] | [requirements#72d73a7ddd, codebase_index#64d7e2257d, human.constraints#absent] |
+| D-7 | design | agent:design | Impact limited to [Link, ServiceException, ShortenerService, JournalLinkRepository, LinkController, LinkResponse] with ripple [InMemoryLinkRepository, JournalLinkRepositoryTest, LinkRepository, ApiExceptionHandler, ShortenerServiceTest, UrlValidator, UrlValidatorTest, LinkControllerTest, ShortenerConfiguration] | type-level reference graph from codebase_index | [requirements#72d73a7ddd, plan#61a8373276, codebase_index#64d7e2257d] |
+| D-8 | design | human:tech-lead.alice | Approved design/design-review | Additive API change (optional expiresAt, new 410) and additive journal field; old clients and old data unaffected. | [requirements#72d73a7ddd, plan#61a8373276, codebase_index#64d7e2257d] |
 
 ## 6. Validation
 
-- Tests: 0 run, 0 failed, compiled=false, errors: ["src/main/java/com/example/shortener/api/ShortenerApi.java:234: illegal character: '#'","src/main/java/com/example/shortener/api/ShortenerApi.java:234: class, interface, enum, or record expected"]
+- Tests: 0 run, 0 failed, compiled=false, errors: ["src/main/java/com/example/shortener/web/LinkController.java:122: illegal character: '#'","src/main/java/com/example/shortener/web/LinkController.java:122: class, interface, enum, or record expected","LinkController.java:122: class, interface, enum, or record expected","LinkController.java:122: illegal character: '#'","src/main/java/com/example/shortener/web/LinkController.java:122: class, interface, enum, or record expected","src/main/java/com/example/shortener/web/LinkController.java:122: illegal character: '#'"]
 - Security scan: 0 critical, 0 high
 
 **Workspace diff vs baseline:** 0 files
@@ -120,7 +120,7 @@ Parallel waves: [["T-expiry-domain"],["T-expiry-store","T-expiry-api"],["T-expir
   "scenario" : "brownfield-link-expiration",
   "status" : "FAILED",
   "finished" : true,
-  "endToEndActiveMs" : 665,
+  "endToEndActiveMs" : 1094,
   "stagesExecuted" : 12,
   "stagesFailed" : 7,
   "retries" : 0,

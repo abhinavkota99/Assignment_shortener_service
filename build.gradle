@@ -1,5 +1,8 @@
-// Shared build configuration. Java 17 bytecode/API level regardless of the JDK used to run Gradle.
-subprojects {
+// Root build.
+// - shortener-service: a self-contained Spring Boot 4 build (see shortener-service/build.gradle), so the
+//   orchestrator can also build a copy of it in isolation.
+// - orchestrator: plain Java 17 + Jackson; configured here.
+project(':orchestrator') {
     apply plugin: 'java'
 
     group = 'com.example'
@@ -11,7 +14,7 @@ subprojects {
     }
 
     repositories {
-        // -PofflineLibs=<dir> resolves jars from a local folder (air-gapped builds/CI).
+        // -PofflineLibs=<dir> resolves jars from a local folder (air-gapped builds).
         if (rootProject.hasProperty('offlineLibs')) {
             flatDir { dirs rootProject.file(rootProject.property('offlineLibs')) }
         } else {
@@ -36,6 +39,6 @@ subprojects {
 
     tasks.withType(Test).configureEach {
         useJUnit()
-        testLogging { events 'failed'; exceptionFormat 'full' }
+        testLogging { events 'failed'; exceptionFormat = 'full' }
     }
 }

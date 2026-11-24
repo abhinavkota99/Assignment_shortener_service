@@ -27,10 +27,15 @@ public final class SecurityScanAgent implements Agent {
         ctx.input("design"); // lineage
         List<Map<String, Object>> diff = ctx.workspace().diffSummary(Orchestrator.BASELINE);
         List<PolicyEngine.FileChange> changes = new ArrayList<>();
+        List<String> binaries = new ArrayList<>();
         for (Map<String, Object> row : diff) {
             String path = (String) row.get("path");
             if (!path.startsWith("src/")) {
                 continue; // code only: docs are generated in a parallel branch and carry no executable risk
+            }
+            if (Boolean.TRUE.equals(row.get("binary"))) {
+                binaries.add(path); // cannot be pattern-scanned; listed for the release reviewer
+                continue;
             }
             boolean deleted = "deleted".equals(row.get("change"));
             changes.add(new PolicyEngine.FileChange(path, deleted ? "delete" : "modify",
@@ -45,6 +50,7 @@ public final class SecurityScanAgent implements Agent {
         report.put("filesScanned", changes.size());
         report.put("critical", critical);
         report.put("high", high);
+        report.set("binaryFilesNotScanned", Json.tree(binaries));
         report.set("findings", Json.tree(findings.stream().map(PolicyFinding::toString).toList()));
         report.set("rules", Json.tree(List.of("hard-coded secrets", "process execution", "unsafe deserialization",
                 "weak crypto / randomness", "TLS bypass", "personal data", "path scope", "change-controlled files", "test deletion")));

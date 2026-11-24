@@ -1,4 +1,4 @@
-package com.example.shortener.api;
+package com.example.shortener.web;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;

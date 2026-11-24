@@ -99,24 +99,25 @@ store = [
             n.put("expiresAt", link.expiresAt().toString()); // optional field: older records simply lack it
         }
 '''),
- patch(jr, '''                            Instant.parse(n.get("createdAt").asText()), n.path("custom").asBoolean()),''', '''                            Instant.parse(n.get("createdAt").asText()), n.path("custom").asBoolean(),
-                            n.hasNonNull("expiresAt") ? Instant.parse(n.get("expiresAt").asText()) : null),'''),
+ patch(jr, '''                            Instant.parse(n.get("createdAt").asString()), n.path("custom").asBoolean()),''', '''                            Instant.parse(n.get("createdAt").asString()), n.path("custom").asBoolean(),
+                            n.hasNonNull("expiresAt") ? Instant.parse(n.get("expiresAt").asString()) : null),'''),
 ]
 check(jr, store)
 
-sa = P+'api/ShortenerApi.java'
+sa = P+'web/LinkController.java'
+lr = P+'web/LinkResponse.java'
 api = [
  patch(sa, ''' *   GET   /{code}                     redirect and record a click        302, 404
  *   HEAD  /{code}                     redirect, no click recorded        302, 404
 ''', ''' *   GET   /{code}                     redirect and record a click        302, 404, 410 (expired)
  *   HEAD  /{code}                     redirect, no click recorded        302, 404, 410 (expired)
 '''),
- patch(sa, 'import java.nio.charset.StandardCharsets;\n', 'import java.nio.charset.StandardCharsets;\nimport java.time.Instant;\nimport java.time.format.DateTimeParseException;\n'),
+ patch(sa, 'import java.util.Map;\n', 'import java.time.Instant;\nimport java.time.format.DateTimeParseException;\nimport java.util.Map;\n'),
  patch(sa, 'Set.of("url", "alias");', 'Set.of("url", "alias", "expiresAt");'),
- patch(sa, '''        ShortenerService.CreateResult result = service.create(url, alias, req.header("idempotency-key"));''',
-           '''        Instant expiresAt = parseInstant(textField(body, "expiresAt"));
-        ShortenerService.CreateResult result = service.create(url, alias, req.header("idempotency-key"), expiresAt);'''),
- patch(sa, '''    private Map<String, Object> linkBody(Link link) {''', '''    private static Instant parseInstant(String value) {
+ patch(sa, '''        ShortenerService.CreateResult result = service.create(url, alias, idempotencyKey);''',
+           '''        Instant expiresAt = parseInstant(text(body, "expiresAt"));
+        ShortenerService.CreateResult result = service.create(url, alias, idempotencyKey, expiresAt);'''),
+ patch(sa, '''    private LinkResponse response(Link link) {''', '''    private static Instant parseInstant(String value) {
         if (value == null) {
             return null;
         }
@@ -127,10 +128,16 @@ api = [
         }
     }
 
-    private Map<String, Object> linkBody(Link link) {'''),
- patch(sa, '        m.put("custom", link.custom());\n', '        m.put("custom", link.custom());\n        m.put("expiresAt", link.expiresAt() == null ? null : link.expiresAt().toString());\n'),
+    private LinkResponse response(Link link) {'''),
+ patch(lr, 'public record LinkResponse(String code, String shortUrl, String targetUrl, String createdAt, boolean custom) {',
+           'public record LinkResponse(String code, String shortUrl, String targetUrl, String createdAt, boolean custom, String expiresAt) {'),
+ patch(lr, 'return new LinkResponse(link.code(), shortUrl, link.targetUrl(), link.createdAt().toString(), link.custom());',
+           '''return new LinkResponse(link.code(), shortUrl, link.targetUrl(), link.createdAt().toString(), link.custom(),
+                link.expiresAt() == null ? null : link.expiresAt().toString());'''),
 ]
-check(sa, api)
+check(sa, [o for o in api if o['path']==sa])
+check(lr, [o for o in api if o['path']==lr])
+
 
 T = 'src/test/java/com/example/shortener/'
 tests = [
@@ -141,24 +148,27 @@ tests = [
 d = pathlib.Path('knowledge/recipes/link-expiration')
 for name, ops, desc in [('domain', domain, 'Link gains optional expiresAt (source-compatible constructor kept); GONE error kind; service validates and enforces expiry'),
                         ('store', store, 'Journal writes optional expiresAt and reads records with or without it'),
-                        ('api', api, 'expiresAt request/response field, ISO-8601 parsing, 410 documented in route table'),
+                        ('api', api, 'expiresAt request/response field (controller + response record), ISO-8601 parsing, 410 documented in route table'),
                         ('tests', tests, 'Service, API and journal-compatibility tests for expiry')]:
     (d/f'{name}.json').write_text(json.dumps({"description":desc,"ops":ops}, indent=2)+"\n")
 
-app = P+'ShortenerApplication.java'
+app = P+'config/ShortenerConfiguration.java'
 wiring = [
- patch(app, 'import com.example.shortener.config.Settings;\n', 'import com.example.shortener.config.Settings;\nimport com.example.shortener.core.CodeGenerator;\nimport com.example.shortener.core.DenylistUrlValidator;\n'),
- patch(app, 'import java.nio.file.Path;\n', 'import java.nio.file.Path;\nimport java.time.Clock;\n'),
- patch(app, '        ShortenerService service = new ShortenerService(repository, settings);\n',
-            '''        // SHORTENER_BLOCKED_HOSTS: comma-separated destination domains (subdomains included) that links may not target.
-        ShortenerService service = new ShortenerService(repository, settings,
-                DenylistUrlValidator.fromEnv(settings, System.getenv()), new CodeGenerator(settings.codeLength()), Clock.systemUTC());
-'''),
+ patch(app, 'import com.example.shortener.core.CodeGenerator;\n', 'import com.example.shortener.core.CodeGenerator;\nimport com.example.shortener.core.DenylistUrlValidator;\n'),
+ patch(app, 'import org.springframework.context.annotation.Bean;\n', 'import org.springframework.beans.factory.annotation.Value;\nimport org.springframework.context.annotation.Bean;\n'),
+ patch(app, '''    @Bean
+    UrlValidator urlValidator(Settings settings) {
+        return new UrlValidator(settings);
+    }''', '''    /** shortener.blocked-hosts (env SHORTENER_BLOCKED_HOSTS): comma-separated destination domains, subdomains included. */
+    @Bean
+    UrlValidator urlValidator(Settings settings, @Value("${shortener.blocked-hosts:}") String blockedHosts) {
+        return DenylistUrlValidator.fromCsv(settings, blockedHosts);
+    }'''),
 ]
 check(app, wiring)
 d = pathlib.Path('knowledge/recipes/destination-denylist')
 (d/'validator.json').write_text(json.dumps({"description":"UrlValidator subclass enforcing a configurable domain denylist via the checkHost extension point","ops":[
  {"op":"create","path":P+'core/DenylistUrlValidator.java',"contentFile":"DenylistUrlValidator.java"},
  {"op":"create","path":T+'core/DenylistUrlValidatorTest.java',"contentFile":"DenylistUrlValidatorTest.java"}]}, indent=2)+"\n")
-(d/'wiring.json').write_text(json.dumps({"description":"Composition root builds the service with the denylist validator from SHORTENER_BLOCKED_HOSTS","ops":wiring}, indent=2)+"\n")
+(d/'wiring.json').write_text(json.dumps({"description":"Spring configuration builds the URL validator with the denylist from shortener.blocked-hosts","ops":wiring}, indent=2)+"\n")
 print("ok")

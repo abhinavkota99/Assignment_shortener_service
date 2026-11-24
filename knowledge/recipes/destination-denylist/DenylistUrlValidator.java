@@ -3,7 +3,6 @@ package com.example.shortener.core;
 import com.example.shortener.config.Settings;
 import java.util.Arrays;
 import java.util.Locale;
-import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -22,11 +21,10 @@ public class DenylistUrlValidator extends UrlValidator {
                 .collect(Collectors.toUnmodifiableSet());
     }
 
-    /** Reads {@code SHORTENER_BLOCKED_HOSTS} (comma-separated); an empty value means no denylist. */
-    public static UrlValidator fromEnv(Settings settings, Map<String, String> env) {
-        String raw = env.getOrDefault("SHORTENER_BLOCKED_HOSTS", "");
-        Set<String> domains = Arrays.stream(raw.split(",")).map(s -> s.trim().toLowerCase(Locale.ROOT))
-                .filter(s -> !s.isEmpty()).collect(Collectors.toSet());
+    /** Builds a validator from a comma-separated list (e.g. {@code shortener.blocked-hosts}); empty means no denylist. */
+    public static UrlValidator fromCsv(Settings settings, String csv) {
+        Set<String> domains = Arrays.stream(csv == null ? new String[0] : csv.split(","))
+                .map(s -> s.trim().toLowerCase(Locale.ROOT)).filter(s -> !s.isEmpty()).collect(Collectors.toSet());
         return domains.isEmpty() ? new UrlValidator(settings) : new DenylistUrlValidator(settings, domains);
     }
 
