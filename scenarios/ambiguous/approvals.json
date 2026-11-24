@@ -1,0 +1,22 @@
+{
+  "decisions": [
+    {
+      "checkpoint": "plan/privacy-review",
+      "decision": "reject",
+      "approver": "dpo.office",
+      "comment": "Per-country analytics needs client IP processing; not allowed without a DPIA. Defer geo analytics; existing referrer and daily-trend analytics remain."
+    },
+    {
+      "checkpoint": "design/design-review",
+      "decision": "approve",
+      "approver": "tech-lead.alice",
+      "comment": "Denylist reuses the existing validation error contract; no breaking change."
+    },
+    {
+      "checkpoint": "release/release",
+      "decision": "approve",
+      "approver": "release-manager.sam",
+      "comment": "Approved for MR; geo analytics tracked separately pending DPIA."
+    }
+  ]
+}

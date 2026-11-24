@@ -1,0 +1,23 @@
+{
+  "description": "Composition root builds the service with the denylist validator from SHORTENER_BLOCKED_HOSTS",
+  "ops": [
+    {
+      "op": "patch",
+      "path": "src/main/java/com/example/shortener/ShortenerApplication.java",
+      "find": "import com.example.shortener.config.Settings;\n",
+      "replace": "import com.example.shortener.config.Settings;\nimport com.example.shortener.core.CodeGenerator;\nimport com.example.shortener.core.DenylistUrlValidator;\n"
+    },
+    {
+      "op": "patch",
+      "path": "src/main/java/com/example/shortener/ShortenerApplication.java",
+      "find": "import java.nio.file.Path;\n",
+      "replace": "import java.nio.file.Path;\nimport java.time.Clock;\n"
+    },
+    {
+      "op": "patch",
+      "path": "src/main/java/com/example/shortener/ShortenerApplication.java",
+      "find": "        ShortenerService service = new ShortenerService(repository, settings);\n",
+      "replace": "        // SHORTENER_BLOCKED_HOSTS: comma-separated destination domains (subdomains included) that links may not target.\n        ShortenerService service = new ShortenerService(repository, settings,\n                DenylistUrlValidator.fromEnv(settings, System.getenv()), new CodeGenerator(settings.codeLength()), Clock.systemUTC());\n"
+    }
+  ]
+}

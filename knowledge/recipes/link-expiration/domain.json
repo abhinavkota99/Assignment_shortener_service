@@ -1,0 +1,59 @@
+{
+  "description": "Link gains optional expiresAt (source-compatible constructor kept); GONE error kind; service validates and enforces expiry",
+  "ops": [
+    {
+      "op": "patch",
+      "path": "src/main/java/com/example/shortener/core/Link.java",
+      "find": "/** A short code mapped to a destination URL. Immutable. */\npublic record Link(String code, String targetUrl, Instant createdAt, boolean custom) {\n\n    public Link {\n        Objects.requireNonNull(code, \"code\");\n        Objects.requireNonNull(targetUrl, \"targetUrl\");\n        Objects.requireNonNull(createdAt, \"createdAt\");\n    }\n}",
+      "replace": "/** A short code mapped to a destination URL, optionally expiring at {@code expiresAt}. Immutable. */\npublic record Link(String code, String targetUrl, Instant createdAt, boolean custom, Instant expiresAt) {\n\n    public Link {\n        Objects.requireNonNull(code, \"code\");\n        Objects.requireNonNull(targetUrl, \"targetUrl\");\n        Objects.requireNonNull(createdAt, \"createdAt\");\n        if (expiresAt != null && !expiresAt.isAfter(createdAt)) {\n            throw new IllegalArgumentException(\"expiresAt must be after createdAt\");\n        }\n    }\n\n    /** Source-compatible constructor for existing callers: links without an expiry never expire. */\n    public Link(String code, String targetUrl, Instant createdAt, boolean custom) {\n        this(code, targetUrl, createdAt, custom, null);\n    }\n\n    /** Expired from the expiry instant onwards (inclusive). */\n    public boolean isExpiredAt(Instant now) {\n        return expiresAt != null && !now.isBefore(expiresAt);\n    }\n}"
+    },
+    {
+      "op": "patch",
+      "path": "src/main/java/com/example/shortener/core/ServiceException.java",
+      "find": "        CONFLICT(409, \"conflict\"),\n",
+      "replace": "        CONFLICT(409, \"conflict\"),\n        GONE(410, \"gone\"),\n"
+    },
+    {
+      "op": "patch",
+      "path": "src/main/java/com/example/shortener/core/ShortenerService.java",
+      "find": "import java.time.Clock;\n",
+      "replace": "import java.time.Clock;\nimport java.time.Duration;\n"
+    },
+    {
+      "op": "patch",
+      "path": "src/main/java/com/example/shortener/core/ShortenerService.java",
+      "find": "    static final int MAX_HEADER_VALUE_LENGTH = 512;\n",
+      "replace": "    static final int MAX_HEADER_VALUE_LENGTH = 512;\n    /** Upper bound on link lifetime, so a typo cannot create an effectively permanent \"temporary\" link. */\n    public static final Duration MAX_LIFETIME = Duration.ofDays(5 * 365L);\n"
+    },
+    {
+      "op": "patch",
+      "path": "src/main/java/com/example/shortener/core/ShortenerService.java",
+      "find": "    public CreateResult create(String url, String alias, String idempotencyKey) {\n",
+      "replace": "    public CreateResult create(String url, String alias, String idempotencyKey) {\n        return create(url, alias, idempotencyKey, null);\n    }\n\n    /** Creates a link that stops redirecting at {@code expiresAt} ({@code null} = never expires). */\n    public CreateResult create(String url, String alias, String idempotencyKey, Instant expiresAt) {\n"
+    },
+    {
+      "op": "patch",
+      "path": "src/main/java/com/example/shortener/core/ShortenerService.java",
+      "find": "        Instant now = clock.instant().truncatedTo(ChronoUnit.SECONDS);\n",
+      "replace": "        Instant now = clock.instant().truncatedTo(ChronoUnit.SECONDS);\n        if (expiresAt != null) {\n            if (!expiresAt.isAfter(now)) {\n                throw ServiceException.validation(\"expiresAt must be in the future\");\n            }\n            if (expiresAt.isAfter(now.plus(MAX_LIFETIME))) {\n                throw ServiceException.validation(\"expiresAt must be at most \" + MAX_LIFETIME.toDays() + \" days ahead\");\n            }\n        }\n"
+    },
+    {
+      "op": "patch",
+      "path": "src/main/java/com/example/shortener/core/ShortenerService.java",
+      "find": "Link link = new Link(alias, target, now, true);",
+      "replace": "Link link = new Link(alias, target, now, true, expiresAt);"
+    },
+    {
+      "op": "patch",
+      "path": "src/main/java/com/example/shortener/core/ShortenerService.java",
+      "find": "Link link = new Link(codes.next(), target, now, false);",
+      "replace": "Link link = new Link(codes.next(), target, now, false, expiresAt);"
+    },
+    {
+      "op": "patch",
+      "path": "src/main/java/com/example/shortener/core/ShortenerService.java",
+      "find": "    /** Looks up the target and, if {@code record}, logs a click. */\n    public Link resolve(String code, String referrer, String userAgent, boolean record) {\n        Link link = get(code);\n",
+      "replace": "    /** Looks up the target and, if {@code record}, logs a click. Expired links are GONE and not counted. */\n    public Link resolve(String code, String referrer, String userAgent, boolean record) {\n        Link link = get(code);\n        if (link.isExpiredAt(clock.instant())) {\n            throw new ServiceException(ServiceException.Kind.GONE, \"link '\" + code + \"' expired at \" + link.expiresAt());\n        }\n"
+    }
+  ]
+}

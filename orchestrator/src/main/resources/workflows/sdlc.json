@@ -1,0 +1,100 @@
+{
+  "name": "governed-sdlc-v1",
+  "description": "Requirements -> analysis -> plan -> design -> parallel implementation -> parallel verification/docs -> readiness -> approved release",
+  "stages": [
+    {
+      "id": "requirements",
+      "phase": "REQUIREMENTS",
+      "description": "Normalise the stated requirement; surface ambiguity",
+      "agent": "requirements-llm",
+      "fallbackAgent": "requirements-rules",
+      "maxAttempts": 3,
+      "initialBackoffMillis": 500,
+      "timeoutSeconds": 120,
+      "exitGates": ["requirements-unambiguous", "requirements-testable"]
+    },
+    {
+      "id": "codebase_analysis",
+      "phase": "ANALYSIS",
+      "description": "Index existing code: types, references, tests, routes, present capabilities",
+      "agent": "codebase-analysis",
+      "maxAttempts": 2
+    },
+    {
+      "id": "plan",
+      "phase": "PLANNING",
+      "description": "Decompose into dependent tasks; plan-level compliance checks",
+      "agent": "planner",
+      "dependsOn": ["requirements", "codebase_analysis"],
+      "exitGates": ["plan-traceable"],
+      "approval": "IF_HIGH_IMPACT"
+    },
+    {
+      "id": "design",
+      "phase": "DESIGN",
+      "description": "API/data contract changes, impact and ripple analysis, risks",
+      "agent": "design",
+      "dependsOn": ["plan"],
+      "exitGates": ["impact-assessed"],
+      "approval": "IF_HIGH_IMPACT"
+    },
+    {
+      "id": "implement",
+      "phase": "IMPLEMENTATION",
+      "description": "Fan-out: one stage per plan task, dependencies preserved",
+      "fanOut": "plan.tasks",
+      "agent": "implementation",
+      "dependsOn": ["design"],
+      "entryGates": ["baseline-checkpointed"],
+      "exitGates": ["change-applied"],
+      "mutatesWorkspace": true,
+      "approval": "IF_HIGH_IMPACT",
+      "maxAttempts": 3,
+      "initialBackoffMillis": 200
+    },
+    {
+      "id": "build_test",
+      "phase": "VERIFICATION",
+      "description": "Compile everything and run the full test suite in an isolated JVM",
+      "agent": "build-test",
+      "dependsOn": ["implement"],
+      "exitGates": ["tests-green", "no-test-regression"],
+      "maxAttempts": 2,
+      "timeoutSeconds": 600
+    },
+    {
+      "id": "security_scan",
+      "phase": "VERIFICATION",
+      "description": "Security and compliance scan of the full diff",
+      "agent": "security-scan",
+      "dependsOn": ["implement"],
+      "exitGates": ["no-critical-findings"]
+    },
+    {
+      "id": "docs",
+      "phase": "DOCUMENTATION",
+      "description": "Generate API reference and change record",
+      "agent": "docs",
+      "dependsOn": ["implement"],
+      "exitGates": ["docs-generated"],
+      "mutatesWorkspace": true
+    },
+    {
+      "id": "release_readiness",
+      "phase": "RELEASE",
+      "description": "Join point: evidence, traceability, release checklist",
+      "agent": "release-readiness",
+      "dependsOn": ["build_test", "security_scan", "docs"],
+      "exitGates": ["release-criteria-met"]
+    },
+    {
+      "id": "release",
+      "phase": "RELEASE",
+      "description": "Package the verified change as a patch for human-controlled rollout",
+      "agent": "release",
+      "dependsOn": ["release_readiness"],
+      "approval": "ALWAYS",
+      "maxAttempts": 2
+    }
+  ]
+}

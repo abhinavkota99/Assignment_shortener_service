@@ -1,0 +1,120 @@
+{
+  "runId" : "greenfield",
+  "scenario" : "greenfield-url-shortener",
+  "files" : [ {
+    "path" : "docs/API.md",
+    "change" : "added",
+    "sha256" : "1d354e135aa0a2d8423b837b20a0e8c9ce28f81b41d83415e4c67fc2337e15e6"
+  }, {
+    "path" : "docs/changes/greenfield-url-shortener.md",
+    "change" : "added",
+    "sha256" : "087b6118f5f58d018bdce8ed76fe0f8643d1e4e044e53a9bbf37ae3f70dcbcd7"
+  }, {
+    "path" : "src/main/java/com/example/shortener/ShortenerApplication.java",
+    "change" : "added",
+    "sha256" : "1f1ee22d257eb0cb7b9f6a0bdf807e6371b4a9baf82aa411fc293123036c249c"
+  }, {
+    "path" : "src/main/java/com/example/shortener/api/ApiRequest.java",
+    "change" : "added",
+    "sha256" : "9744df3772985cdd80461e14273b3d96cdad1056ed05edcd48469bf1de429034"
+  }, {
+    "path" : "src/main/java/com/example/shortener/api/ApiResponse.java",
+    "change" : "added",
+    "sha256" : "206d15c3bbac132dd603e144d744d01eaebbab615e5da2f3f96d17f127be66c7"
+  }, {
+    "path" : "src/main/java/com/example/shortener/api/HttpServerAdapter.java",
+    "change" : "added",
+    "sha256" : "735db991078c128ef1baca542e3a89ebcde62d79a43215c958289cb49392424a"
+  }, {
+    "path" : "src/main/java/com/example/shortener/api/ShortenerApi.java",
+    "change" : "added",
+    "sha256" : "a7e921a62308eee1cd8ae6843743a8b9482906dbc190ebdadc55ae09078e2d7a"
+  }, {
+    "path" : "src/main/java/com/example/shortener/api/TokenBucketRateLimiter.java",
+    "change" : "added",
+    "sha256" : "6770f41ebf686e7e5e0dddcb935eb64e75d32f1a7b78009cd4924c49ac1b02fe"
+  }, {
+    "path" : "src/main/java/com/example/shortener/config/Settings.java",
+    "change" : "added",
+    "sha256" : "6bbcc7af3795f2166621ca739b090412e2a229466a4b7072b3700e4ba82ce768"
+  }, {
+    "path" : "src/main/java/com/example/shortener/core/ClickEvent.java",
+    "change" : "added",
+    "sha256" : "8ae5853a5a2b9225cf0e365dab4b4458c38302f38c119cb8a96fd17a4d33132e"
+  }, {
+    "path" : "src/main/java/com/example/shortener/core/CodeGenerator.java",
+    "change" : "added",
+    "sha256" : "c5af5089caae55770b885401572be0d2ab03406b15cd8d165627a41b062ce107"
+  }, {
+    "path" : "src/main/java/com/example/shortener/core/Link.java",
+    "change" : "added",
+    "sha256" : "2492f5a0531e87e96c6b8374060018cd14bcaf14214305591acc74fafd8c0148"
+  }, {
+    "path" : "src/main/java/com/example/shortener/core/LinkStats.java",
+    "change" : "added",
+    "sha256" : "20e5afe3d3f23cabfdf104a16ee3bb6ebaf98dd906211460d457fafdb80f8a85"
+  }, {
+    "path" : "src/main/java/com/example/shortener/core/ServiceException.java",
+    "change" : "added",
+    "sha256" : "7d0ae7b34689b26f475844053b0b33d25bd1cafab3b814456aa386fb4c35ebcb"
+  }, {
+    "path" : "src/main/java/com/example/shortener/core/ShortenerService.java",
+    "change" : "added",
+    "sha256" : "1aaa15db0f0b79cb79707f52aa48b50346d2bce47434997a73b0b866e711e18b"
+  }, {
+    "path" : "src/main/java/com/example/shortener/core/UrlValidator.java",
+    "change" : "added",
+    "sha256" : "d0bb5ccc596cd445a38e34e9e57252ed0aa9da05d484384944b38086b272929f"
+  }, {
+    "path" : "src/main/java/com/example/shortener/store/DuplicateKeyException.java",
+    "change" : "added",
+    "sha256" : "cc9eddfb248c2cb6d036d8aca3b172703c64c5ca189c72bf8ae647d01971a3e3"
+  }, {
+    "path" : "src/main/java/com/example/shortener/store/InMemoryLinkRepository.java",
+    "change" : "added",
+    "sha256" : "ecc24c41bc3dc17414f292cb845a9dc0e70d47a7929109677cd7812f9df654fa"
+  }, {
+    "path" : "src/main/java/com/example/shortener/store/JournalLinkRepository.java",
+    "change" : "added",
+    "sha256" : "021cff552e9f7d4514ffa335e69ea30003cffd79179c81d7300374eb5a0864b4"
+  }, {
+    "path" : "src/main/java/com/example/shortener/store/LinkRepository.java",
+    "change" : "added",
+    "sha256" : "13ce9e5ce5c1b091968b69b3aa2c780c6b59f7035673fbf7448263b633cb989c"
+  }, {
+    "path" : "src/test/java/com/example/shortener/HttpIntegrationTest.java",
+    "change" : "added",
+    "sha256" : "c7ff6f1eb7373c8093e63e80a79726a46478d42e9eae284347e0c5e1eb6ad713"
+  }, {
+    "path" : "src/test/java/com/example/shortener/api/ShortenerApiTest.java",
+    "change" : "added",
+    "sha256" : "b1f126b3896b9bc0d6c6563cc4ac5717d81275aee9e5aa5ac7bc6b0b63805daa"
+  }, {
+    "path" : "src/test/java/com/example/shortener/api/TokenBucketRateLimiterTest.java",
+    "change" : "added",
+    "sha256" : "1200366cde6e09a89d39dc32402ea339877f0ffbd35ed0d46c4c65f0dccb55da"
+  }, {
+    "path" : "src/test/java/com/example/shortener/config/SettingsTest.java",
+    "change" : "added",
+    "sha256" : "41b6d494c298a7e8f94accbe12b7949a4b289aa5cb1d39f2e83022819996e800"
+  }, {
+    "path" : "src/test/java/com/example/shortener/core/CodeGeneratorTest.java",
+    "change" : "added",
+    "sha256" : "580349d3e688d7f6eacc14ad1c59b6d13670172e52695cf32123353147adc317"
+  }, {
+    "path" : "src/test/java/com/example/shortener/core/ShortenerServiceTest.java",
+    "change" : "added",
+    "sha256" : "17fdac35e50ac7aefe5a51674bcb7e105dcf4e6b32d39652bcf87556e2e339b0"
+  }, {
+    "path" : "src/test/java/com/example/shortener/core/UrlValidatorTest.java",
+    "change" : "added",
+    "sha256" : "e68236f3ffc3ddd007e475bc25d7481c6ad8863a01d82c44a2e9f21510bcc817"
+  }, {
+    "path" : "src/test/java/com/example/shortener/store/JournalLinkRepositoryTest.java",
+    "change" : "added",
+    "sha256" : "bf60ddc39f28f17d04466225fdc13016a76572a7cea44dc029fdd4f4bedff18e"
+  } ],
+  "patch" : "CHANGE.patch",
+  "patchSha256" : "c3e3f70e8c08f69bd96b72db7ecd44bbd00e23b81b9c3c661a3ed78433e5de5d",
+  "apply" : "cd <service module> && git apply -p1 CHANGE.patch"
+}

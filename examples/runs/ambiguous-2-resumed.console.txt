@@ -1,0 +1,21 @@
+== resume ambiguous
+  requirements                 re-plan: input 'human.clarifications' changed
+  requirements                 fallback -> requirements-rules (no LLM configured (offline mode))
+  requirements                 OK   4 capabilities, 5 functional requirements, 4 NFRs, 2 ambiguities (0 blocking & open) [attempts=2]
+  plan                         rejected by dpo.office -> re-planning with constraint
+  plan                         OK   2 tasks in 2 waves; reused 2, excluded 1
+  design                       OK   approved
+  implement                    expanded into 2 parallelisable task stages
+  implement:T-denylist         OK   Denylist-aware URL validator: 2 files, +103 lines
+  implement:T-denylist-wiring  OK   Wire denylist from SHORTENER_BLOCKED_HOSTS: 1 files, +6 lines
+  implement                    OK   synchronisation barrier reached
+  docs                         OK   generated 2 documents
+  security_scan                OK   3 changed source files scanned: 0 critical, 0 high
+  build_test                   OK   40 tests, 0 failures
+  release_readiness            OK   READY: 7 checks, 5 files changed
+  release                      OK   release package with 5 files at release/
+run ambiguous -> SUCCEEDED
+
+status : SUCCEEDED
+report : runs/ambiguous/REPORT.md
+release: runs/ambiguous/release

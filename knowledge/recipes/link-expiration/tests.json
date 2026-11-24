@@ -1,0 +1,20 @@
+{
+  "description": "Service, API and journal-compatibility tests for expiry",
+  "ops": [
+    {
+      "op": "create",
+      "path": "src/test/java/com/example/shortener/core/LinkExpirationTest.java",
+      "contentFile": "LinkExpirationTest.java"
+    },
+    {
+      "op": "create",
+      "path": "src/test/java/com/example/shortener/api/LinkExpirationApiTest.java",
+      "contentFile": "LinkExpirationApiTest.java"
+    },
+    {
+      "op": "create",
+      "path": "src/test/java/com/example/shortener/store/JournalExpiryCompatibilityTest.java",
+      "contentFile": "JournalExpiryCompatibilityTest.java"
+    }
+  ]
+}

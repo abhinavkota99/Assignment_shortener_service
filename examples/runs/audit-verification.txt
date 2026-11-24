@@ -1,0 +1,6 @@
+VALID: 109 entries, hash chain intact
+VALID: 79 entries, hash chain intact
+VALID: 96 entries, hash chain intact
+VALID: 90 entries, hash chain intact
+VALID: 71 entries, hash chain intact
+VALID: 29 entries, hash chain intact

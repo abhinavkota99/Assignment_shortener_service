@@ -1,0 +1,17 @@
+{
+  "description": "Journal writes optional expiresAt and reads records with or without it",
+  "ops": [
+    {
+      "op": "patch",
+      "path": "src/main/java/com/example/shortener/store/JournalLinkRepository.java",
+      "find": "                .put(\"createdAt\", link.createdAt().toString()).put(\"custom\", link.custom());\n",
+      "replace": "                .put(\"createdAt\", link.createdAt().toString()).put(\"custom\", link.custom());\n        if (link.expiresAt() != null) {\n            n.put(\"expiresAt\", link.expiresAt().toString()); // optional field: older records simply lack it\n        }\n"
+    },
+    {
+      "op": "patch",
+      "path": "src/main/java/com/example/shortener/store/JournalLinkRepository.java",
+      "find": "                            Instant.parse(n.get(\"createdAt\").asText()), n.path(\"custom\").asBoolean()),",
+      "replace": "                            Instant.parse(n.get(\"createdAt\").asText()), n.path(\"custom\").asBoolean(),\n                            n.hasNonNull(\"expiresAt\") ? Instant.parse(n.get(\"expiresAt\").asText()) : null),"
+    }
+  ]
+}

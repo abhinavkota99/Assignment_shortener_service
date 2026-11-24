@@ -1,0 +1,27 @@
+plugins {
+    id 'application'
+}
+
+description = 'Agentic SDLC orchestrator: governed, stateful, graph-based execution of software changes'
+
+dependencies {
+    implementation libs.jackson
+    // The build/test agent runs JUnit suites inside the change workspace, so JUnit is a runtime dependency here.
+    implementation libs.junit
+}
+
+application {
+    mainClass = 'com.example.agentic.cli.AgenticCli'
+    applicationName = 'agentic'
+}
+
+tasks.named('run') {
+    workingDir = rootProject.projectDir
+    standardInput = System.in
+}
+
+tasks.withType(Test).configureEach {
+    workingDir = rootProject.projectDir
+    // end-to-end scenario tests compile and run a full service test suite in a subprocess
+    maxHeapSize = '1g'
+}

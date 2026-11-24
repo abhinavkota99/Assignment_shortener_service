@@ -1,0 +1,23 @@
+{
+  "comment": "Recorded human decisions for the greenfield run. Keys are <stage>/<checkpoint>.",
+  "decisions": [
+    {
+      "checkpoint": "design/design-review",
+      "decision": "approve",
+      "approver": "tech-lead.alice",
+      "comment": "Versioned resource API under /api/v1; 302 with no-cache redirect is right because every click must be counted."
+    },
+    {
+      "checkpoint": "implement:T-api/privacy-review",
+      "decision": "approve",
+      "approver": "privacy-officer.dana",
+      "comment": "Client IP is used only in memory as the rate-limit key; it is never persisted or logged. Approved."
+    },
+    {
+      "checkpoint": "release/release",
+      "decision": "approve",
+      "approver": "release-manager.sam",
+      "comment": "All readiness checks green; raise as a merge request."
+    }
+  ]
+}

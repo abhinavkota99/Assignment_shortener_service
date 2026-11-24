@@ -1,0 +1,7 @@
+{
+  "id": "ambiguous-safety-and-insight",
+  "title": "Ambiguous: 'make it safer and give marketing better insight'",
+  "type": "brownfield",
+  "baseline": "shortener-service",
+  "requirement": "Make our link shortener safer for the people who click our links, and give marketing better insight into how their links perform."
+}

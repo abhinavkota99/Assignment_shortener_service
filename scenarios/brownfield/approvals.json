@@ -1,0 +1,16 @@
+{
+  "decisions": [
+    {
+      "checkpoint": "design/design-review",
+      "decision": "approve",
+      "approver": "tech-lead.alice",
+      "comment": "Additive API change (optional expiresAt, new 410) and additive journal field; old clients and old data unaffected."
+    },
+    {
+      "checkpoint": "release/release",
+      "decision": "approve",
+      "approver": "release-manager.sam",
+      "comment": "Full suite green including regression of existing tests; approve MR."
+    }
+  ]
+}

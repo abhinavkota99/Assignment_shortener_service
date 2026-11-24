@@ -1,0 +1,8 @@
+{
+  "answeredBy": "product-owner.maria",
+  "answers": {
+    "AMB-safety": "denylist",
+    "AMB-insight": "geo"
+  },
+  "notes": "Safety = protect clickers from malicious destinations. Marketing asked specifically for per-country numbers."
+}

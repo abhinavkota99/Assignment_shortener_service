@@ -1,0 +1,13 @@
+{
+  "runs" : 6,
+  "finishedRuns" : 5,
+  "pausedRuns" : 1,
+  "successRate" : 0.8,
+  "retriesPerRun" : 0.6,
+  "retryRatePerStage" : 0.042,
+  "rollbackFrequency" : 0.2,
+  "fallbacksPerRun" : 0.0,
+  "mttrMs" : 486,
+  "e2eLatencyP50Ms" : 3079,
+  "e2eLatencyP95Ms" : 5108
+}

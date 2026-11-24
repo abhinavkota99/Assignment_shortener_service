@@ -1,0 +1,259 @@
+{
+  "capabilities": [
+    {
+      "id": "link_creation",
+      "title": "Create short links",
+      "keywords": ["shorten", "short link", "short url", "short code", "link shortener"],
+      "requirements": [
+        "A client can submit an absolute http(s) URL and receive a unique, non-guessable short code and short URL.",
+        "Invalid, unsafe or self-referencing destination URLs are rejected with a validation error."
+      ],
+      "acceptance": [
+        "POST /api/v1/links with a valid URL returns 201 with code, shortUrl, targetUrl and createdAt",
+        "Non-http(s), credential-bearing, private-network and malformed URLs return 400 validation_failed"
+      ],
+      "evidence": ["type:ShortenerService", "text:/api/v1/links"],
+      "tasks": ["T-domain", "T-config", "T-store", "T-service", "T-api", "T-bootstrap"],
+      "api": ["POST /api/v1/links: create a link (JSON body {url, alias?})", "GET /api/v1/links/{code}: link metadata"],
+      "risks": ["open-redirect abuse (phishing) - mitigated by URL validation and rate limiting", "code enumeration - mitigated by CSPRNG base62 codes"]
+    },
+    {
+      "id": "custom_alias",
+      "title": "Custom aliases",
+      "keywords": ["custom alias", "alias", "vanity"],
+      "requirements": ["A client may choose a custom alias instead of a generated code; aliases are unique and cannot shadow service routes."],
+      "acceptance": ["Creating an alias that exists returns 409 conflict", "Reserved words (api, healthz, metrics ...) are rejected"],
+      "evidence": ["text:aliasProblem"],
+      "tasks": ["T-codes", "T-service"]
+    },
+    {
+      "id": "redirect",
+      "title": "Redirect",
+      "keywords": ["redirect", "visiting a short link", "visit a short link"],
+      "requirements": ["Requesting a short code redirects the caller to the destination URL."],
+      "acceptance": ["GET /{code} returns 302 with Location = target URL", "Unknown codes return 404"],
+      "evidence": ["text:Cache-Control"],
+      "tasks": ["T-api"],
+      "api": ["GET|HEAD /{code}: 302 redirect (not cached by browsers so each click is counted)"]
+    },
+    {
+      "id": "click_analytics",
+      "title": "Click analytics",
+      "keywords": ["analytics", "click", "stats", "statistics"],
+      "requirements": ["Link owners can see total clicks, clicks per day and top referrers for a link."],
+      "acceptance": ["GET /api/v1/links/{code}/stats returns totalClicks, clicksByDay, topReferrers", "HEAD requests and link previews are not counted"],
+      "evidence": ["type:LinkStats"],
+      "tasks": ["T-service", "T-api"],
+      "api": ["GET /api/v1/links/{code}/stats?days=1..365: click analytics"],
+      "data": ["click events (code, timestamp, referrer, user agent) - no IP addresses stored"]
+    },
+    {
+      "id": "durability",
+      "title": "Durable storage",
+      "keywords": ["survive restart", "restarts", "durable", "persist"],
+      "requirements": ["Acknowledged writes survive a process restart or crash."],
+      "acceptance": ["Links and clicks are present after restart", "A torn final journal record is tolerated; corruption elsewhere fails startup"],
+      "evidence": ["type:JournalLinkRepository"],
+      "tasks": ["T-journal"],
+      "data": ["append-only JSON-lines journal with per-record format version"],
+      "risks": ["single-node storage: no replication (documented limitation)"]
+    },
+    {
+      "id": "idempotency",
+      "title": "Safe retries (idempotent create)",
+      "keywords": ["safe retries", "idempotent", "idempotency", "retries"],
+      "requirements": ["Clients can safely retry link creation using an Idempotency-Key without creating duplicates."],
+      "acceptance": ["Same Idempotency-Key returns the original link with 200", "Concurrent duplicates create exactly one link"],
+      "evidence": ["text:idempotency-key"],
+      "tasks": ["T-service"]
+    },
+    {
+      "id": "abuse_protection",
+      "title": "Abuse protection",
+      "keywords": ["abuse", "rate limit", "rate-limit", "throttl"],
+      "requirements": ["Link creation is rate limited per client and destination URLs are validated against abuse patterns."],
+      "acceptance": ["Exceeding the rate limit returns 429 with Retry-After", "Oversized request bodies return 413"],
+      "evidence": ["type:TokenBucketRateLimiter"],
+      "tasks": ["T-ratelimit", "T-validation"],
+      "risks": ["in-process limiter: limit multiplies with instance count (documented trade-off)"]
+    },
+    {
+      "id": "operability",
+      "title": "Operability (health, readiness, metrics)",
+      "keywords": ["health", "metrics", "observab", "monitor", "reliable"],
+      "requirements": ["The service exposes liveness, readiness and request metrics and logs structured request records."],
+      "acceptance": ["GET /healthz returns 200", "GET /readyz returns 503 when storage is unhealthy", "GET /metrics returns counters"],
+      "evidence": ["text:/readyz"],
+      "tasks": ["T-api", "T-bootstrap"]
+    },
+    {
+      "id": "link_expiration",
+      "title": "Link expiration",
+      "keywords": ["expire", "expiry", "expiration", "ttl", "time-limited"],
+      "requirements": [
+        "A client may set an optional expiry time (ISO-8601 UTC) when creating a link; it must be in the future and at most 5 years ahead.",
+        "After expiry the short link stops redirecting and returns 410 Gone; expired visits are not counted as clicks.",
+        "Metadata and analytics of expired links remain available; links created without expiry never expire."
+      ],
+      "acceptance": [
+        "POST with expiresAt in the past or more than 5 years ahead returns 400",
+        "GET /{code} after expiry returns 410 gone and records no click",
+        "GET /api/v1/links/{code} shows expiresAt; stats remain available after expiry",
+        "Journal records written before this change still load (no expiry)"
+      ],
+      "evidence": ["text:expiresAt"],
+      "tasks": ["T-expiry-domain", "T-expiry-store", "T-expiry-api", "T-expiry-tests"],
+      "api": [
+        "POST /api/v1/links: new optional field expiresAt (additive, backward compatible)",
+        "GET /api/v1/links/{code}: response gains expiresAt (null when not set)",
+        "GET|HEAD /{code}: new status 410 gone for expired links"
+      ],
+      "data": ["journal 'link' record: optional expiresAt field; old records without it load as never-expiring (format version unchanged)"],
+      "risks": [
+        "clock skew between instances could make expiry fire early or late by the skew - acceptable at second granularity",
+        "clients that cached a 302 keep redirecting after expiry - mitigated: redirects are sent with Cache-Control private, max-age=0"
+      ]
+    },
+    {
+      "id": "destination_denylist",
+      "title": "Block known-malicious destinations",
+      "keywords": ["denylist", "blocklist", "malicious domain"],
+      "requirements": ["Operators can configure a denylist of destination domains (including their subdomains); links to them cannot be created."],
+      "acceptance": ["With SHORTENER_BLOCKED_HOSTS=evil.example, creating a link to https://a.evil.example/x returns 400", "Other domains are unaffected"],
+      "evidence": ["type:DenylistUrlValidator"],
+      "tasks": ["T-denylist", "T-denylist-wiring"],
+      "api": ["POST /api/v1/links: may now return 400 validation_failed for denylisted hosts (same error shape)"],
+      "risks": ["static denylist goes stale; a reputation feed would be a follow-up", "existing links to newly blocked domains keep working (scope decision)"]
+    },
+    {
+      "id": "api_key_auth",
+      "title": "API keys for link creation",
+      "keywords": ["api key", "api keys", "authenticate"],
+      "requirements": ["Only callers presenting a valid API key can create links."],
+      "acceptance": ["POST without a valid key returns 401"],
+      "evidence": ["type:ApiKeyAuthenticator"],
+      "tasks": ["T-apikey"]
+    },
+    {
+      "id": "geo_analytics",
+      "title": "Per-country click analytics",
+      "keywords": ["per-country", "geolocation", "geo analytics"],
+      "requirements": ["Click analytics include a per-country breakdown."],
+      "acceptance": ["stats include clicksByCountry"],
+      "evidence": ["text:clicksByCountry"],
+      "tasks": ["T-geo"],
+      "data": ["click events would need the client IP or a derived location (personal data)"]
+    }
+  ],
+  "tasks": [
+    {"id": "T-domain", "title": "Domain model and errors", "capability": "link_creation",
+     "files": ["src/main/java/com/example/shortener/core/Link.java", "src/main/java/com/example/shortener/core/ClickEvent.java",
+               "src/main/java/com/example/shortener/core/ServiceException.java", "src/main/java/com/example/shortener/core/LinkStats.java"],
+     "recipe": {"type": "reference", "paths": ["src/main/java/com/example/shortener/core/Link.java", "src/main/java/com/example/shortener/core/ClickEvent.java",
+               "src/main/java/com/example/shortener/core/ServiceException.java", "src/main/java/com/example/shortener/core/LinkStats.java"]}},
+    {"id": "T-config", "title": "Configuration", "capability": "link_creation",
+     "files": ["src/main/java/com/example/shortener/config/Settings.java", "src/test/java/com/example/shortener/config/SettingsTest.java"],
+     "tests": ["src/test/java/com/example/shortener/config/SettingsTest.java"],
+     "recipe": {"type": "reference", "paths": ["src/main/java/com/example/shortener/config/Settings.java", "src/test/java/com/example/shortener/config/SettingsTest.java"]}},
+    {"id": "T-codes", "title": "Short-code generation and alias rules", "capability": "custom_alias",
+     "files": ["src/main/java/com/example/shortener/core/CodeGenerator.java", "src/test/java/com/example/shortener/core/CodeGeneratorTest.java"],
+     "tests": ["src/test/java/com/example/shortener/core/CodeGeneratorTest.java"],
+     "recipe": {"type": "reference", "paths": ["src/main/java/com/example/shortener/core/CodeGenerator.java", "src/test/java/com/example/shortener/core/CodeGeneratorTest.java"]}},
+    {"id": "T-validation", "title": "Destination URL validation", "capability": "abuse_protection", "dependsOn": ["T-config", "T-domain"],
+     "files": ["src/main/java/com/example/shortener/core/UrlValidator.java", "src/test/java/com/example/shortener/core/UrlValidatorTest.java"],
+     "tests": ["src/test/java/com/example/shortener/core/UrlValidatorTest.java"],
+     "recipe": {"type": "reference", "paths": ["src/main/java/com/example/shortener/core/UrlValidator.java", "src/test/java/com/example/shortener/core/UrlValidatorTest.java"]}},
+    {"id": "T-store", "title": "Repository port and in-memory store", "capability": "link_creation", "dependsOn": ["T-domain"],
+     "files": ["src/main/java/com/example/shortener/store/LinkRepository.java", "src/main/java/com/example/shortener/store/DuplicateKeyException.java",
+               "src/main/java/com/example/shortener/store/InMemoryLinkRepository.java"],
+     "recipe": {"type": "reference", "paths": ["src/main/java/com/example/shortener/store/LinkRepository.java", "src/main/java/com/example/shortener/store/DuplicateKeyException.java",
+               "src/main/java/com/example/shortener/store/InMemoryLinkRepository.java"]}},
+    {"id": "T-journal", "title": "Durable journal repository", "capability": "durability", "dependsOn": ["T-store"],
+     "files": ["src/main/java/com/example/shortener/store/JournalLinkRepository.java", "src/test/java/com/example/shortener/store/JournalLinkRepositoryTest.java"],
+     "tests": ["src/test/java/com/example/shortener/store/JournalLinkRepositoryTest.java"],
+     "recipe": {"type": "reference", "paths": ["src/main/java/com/example/shortener/store/JournalLinkRepository.java", "src/test/java/com/example/shortener/store/JournalLinkRepositoryTest.java"]}},
+    {"id": "T-service", "title": "Link service (create, resolve, idempotency, analytics)", "capability": "link_creation",
+     "dependsOn": ["T-store", "T-validation", "T-codes", "T-config"],
+     "files": ["src/main/java/com/example/shortener/core/ShortenerService.java", "src/test/java/com/example/shortener/core/ShortenerServiceTest.java"],
+     "tests": ["src/test/java/com/example/shortener/core/ShortenerServiceTest.java"],
+     "recipe": {"type": "reference", "paths": ["src/main/java/com/example/shortener/core/ShortenerService.java", "src/test/java/com/example/shortener/core/ShortenerServiceTest.java"]}},
+    {"id": "T-ratelimit", "title": "Token-bucket rate limiter", "capability": "abuse_protection",
+     "files": ["src/main/java/com/example/shortener/api/TokenBucketRateLimiter.java", "src/test/java/com/example/shortener/api/TokenBucketRateLimiterTest.java"],
+     "tests": ["src/test/java/com/example/shortener/api/TokenBucketRateLimiterTest.java"],
+     "recipe": {"type": "reference", "paths": ["src/main/java/com/example/shortener/api/TokenBucketRateLimiter.java", "src/test/java/com/example/shortener/api/TokenBucketRateLimiterTest.java"]}},
+    {"id": "T-api", "title": "HTTP API, routing and server adapter", "capability": "redirect", "dependsOn": ["T-service", "T-ratelimit"],
+     "files": ["src/main/java/com/example/shortener/api/ApiRequest.java", "src/main/java/com/example/shortener/api/ApiResponse.java",
+               "src/main/java/com/example/shortener/api/ShortenerApi.java", "src/main/java/com/example/shortener/api/HttpServerAdapter.java",
+               "src/test/java/com/example/shortener/api/ShortenerApiTest.java"],
+     "tests": ["src/test/java/com/example/shortener/api/ShortenerApiTest.java"],
+     "recipe": {"type": "reference", "paths": ["src/main/java/com/example/shortener/api/ApiRequest.java", "src/main/java/com/example/shortener/api/ApiResponse.java",
+               "src/main/java/com/example/shortener/api/ShortenerApi.java", "src/main/java/com/example/shortener/api/HttpServerAdapter.java",
+               "src/test/java/com/example/shortener/api/ShortenerApiTest.java"]}},
+    {"id": "T-bootstrap", "title": "Composition root and end-to-end test", "capability": "operability", "dependsOn": ["T-api", "T-journal"],
+     "files": ["src/main/java/com/example/shortener/ShortenerApplication.java", "src/test/java/com/example/shortener/HttpIntegrationTest.java"],
+     "tests": ["src/test/java/com/example/shortener/HttpIntegrationTest.java"],
+     "recipe": {"type": "reference", "paths": ["src/main/java/com/example/shortener/ShortenerApplication.java", "src/test/java/com/example/shortener/HttpIntegrationTest.java"]}},
+
+    {"id": "T-expiry-domain", "title": "Expiry in domain model and service", "capability": "link_expiration",
+     "files": ["src/main/java/com/example/shortener/core/Link.java", "src/main/java/com/example/shortener/core/ServiceException.java",
+               "src/main/java/com/example/shortener/core/ShortenerService.java"],
+     "recipe": {"type": "changeset", "file": "recipes/link-expiration/domain.json"}},
+    {"id": "T-expiry-store", "title": "Persist expiry in the journal (backward compatible)", "capability": "link_expiration", "dependsOn": ["T-expiry-domain"],
+     "files": ["src/main/java/com/example/shortener/store/JournalLinkRepository.java"],
+     "recipe": {"type": "changeset", "file": "recipes/link-expiration/store.json"}},
+    {"id": "T-expiry-api", "title": "expiresAt in the HTTP contract, 410 Gone", "capability": "link_expiration", "dependsOn": ["T-expiry-domain"],
+     "files": ["src/main/java/com/example/shortener/api/ShortenerApi.java"],
+     "recipe": {"type": "changeset", "file": "recipes/link-expiration/api.json"}},
+    {"id": "T-expiry-tests", "title": "Expiry tests (service, API, journal compatibility)", "capability": "link_expiration",
+     "dependsOn": ["T-expiry-domain", "T-expiry-store", "T-expiry-api"],
+     "files": ["src/test/java/com/example/shortener/core/LinkExpirationTest.java", "src/test/java/com/example/shortener/api/LinkExpirationApiTest.java",
+               "src/test/java/com/example/shortener/store/JournalExpiryCompatibilityTest.java"],
+     "tests": ["src/test/java/com/example/shortener/core/LinkExpirationTest.java", "src/test/java/com/example/shortener/api/LinkExpirationApiTest.java",
+               "src/test/java/com/example/shortener/store/JournalExpiryCompatibilityTest.java"],
+     "recipe": {"type": "changeset", "file": "recipes/link-expiration/tests.json"}},
+
+    {"id": "T-denylist", "title": "Denylist-aware URL validator", "capability": "destination_denylist",
+     "files": ["src/main/java/com/example/shortener/core/DenylistUrlValidator.java", "src/test/java/com/example/shortener/core/DenylistUrlValidatorTest.java"],
+     "tests": ["src/test/java/com/example/shortener/core/DenylistUrlValidatorTest.java"],
+     "recipe": {"type": "changeset", "file": "recipes/destination-denylist/validator.json"}},
+    {"id": "T-denylist-wiring", "title": "Wire denylist from SHORTENER_BLOCKED_HOSTS", "capability": "destination_denylist", "dependsOn": ["T-denylist"],
+     "files": ["src/main/java/com/example/shortener/ShortenerApplication.java"],
+     "recipe": {"type": "changeset", "file": "recipes/destination-denylist/wiring.json"}},
+
+    {"id": "T-apikey", "title": "API key authentication for create", "capability": "api_key_auth",
+     "files": ["src/main/java/com/example/shortener/api/ApiKeyAuthenticator.java"], "recipe": {"type": "none"}},
+    {"id": "T-geo", "title": "Per-country analytics from client IP", "capability": "geo_analytics", "tags": ["personal-data"],
+     "files": ["src/main/java/com/example/shortener/core/ClickEvent.java"], "recipe": {"type": "none"}}
+  ],
+  "ambiguities": [
+    {
+      "id": "AMB-safety",
+      "triggers": ["safer", "safety", "more secure", "secure"],
+      "question": "What does 'safer' mean for this change - which threat should it address?",
+      "blocking": true,
+      "options": [
+        {"id": "denylist", "label": "Protect people who click: block links to known-malicious destination domains (configurable denylist)", "capabilities": ["destination_denylist"]},
+        {"id": "api-keys", "label": "Protect the service: only authenticated clients (API keys) may create links", "capabilities": ["api_key_auth"]}
+      ],
+      "defaultOption": "denylist"
+    },
+    {
+      "id": "AMB-insight",
+      "triggers": ["better insight", "insight", "more analytics", "better analytics"],
+      "question": "Which additional insight does marketing need?",
+      "blocking": true,
+      "options": [
+        {"id": "referrers", "label": "Traffic sources and daily trends (referrers, clicks per day)", "capabilities": ["click_analytics"]},
+        {"id": "geo", "label": "Where clicks come from (per-country breakdown; requires processing client IP addresses)", "capabilities": ["geo_analytics"]}
+      ],
+      "defaultOption": "referrers"
+    }
+  ],
+  "qualifiers": [
+    {"term": "fast", "category": "performance", "question": "What latency target?", "assumption": "Redirect p99 latency must not regress versus the current release (measured on the same hardware)."},
+    {"term": "quickly", "category": "performance", "question": "What latency target?", "assumption": "Redirect p99 latency must not regress versus the current release."},
+    {"term": "scalable", "category": "capacity", "question": "What load?", "assumption": "Design for horizontal scale-out; single-node prototype limits documented."},
+    {"term": "reliable", "category": "reliability", "question": "What availability target?", "assumption": "Survive process restarts without data loss; readiness endpoint gates traffic."},
+    {"term": "user-friendly", "category": "usability", "question": "For whom?", "assumption": "Consistent JSON errors with actionable messages."}
+  ]
+}

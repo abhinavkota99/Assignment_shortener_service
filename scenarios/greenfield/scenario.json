@@ -1,0 +1,7 @@
+{
+  "id": "greenfield-url-shortener",
+  "title": "Greenfield: build the URL shortener service",
+  "type": "greenfield",
+  "reference": "shortener-service",
+  "requirement": "Build a URL shortener service. Clients shorten long URLs into a short link, optionally choosing a custom alias. Visiting a short link should redirect to the original URL, and link owners need click analytics (total clicks, daily trend, top referrers). The service must be reliable: data has to survive restarts, clients need safe retries when creating links, and it must be protected against abuse. Expose health and metrics endpoints for operations. Target p99 redirect latency under 50 ms at 200 requests per second on a single node."
+}

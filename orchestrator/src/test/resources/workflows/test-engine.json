@@ -1,0 +1,11 @@
+{
+  "name": "engine-test",
+  "stages": [
+    {"id": "start", "phase": "REQUIREMENTS", "agent": "start", "fallbackAgent": "start-fallback"},
+    {"id": "left", "phase": "ANALYSIS", "agent": "left", "dependsOn": ["start"]},
+    {"id": "right", "phase": "ANALYSIS", "agent": "right", "dependsOn": ["start"]},
+    {"id": "change", "phase": "IMPLEMENTATION", "agent": "change", "dependsOn": ["left", "right"],
+     "mutatesWorkspace": true, "approval": "IF_HIGH_IMPACT", "maxAttempts": 3, "initialBackoffMillis": 10},
+    {"id": "verify", "phase": "VERIFICATION", "agent": "verify", "dependsOn": ["change"]}
+  ]
+}

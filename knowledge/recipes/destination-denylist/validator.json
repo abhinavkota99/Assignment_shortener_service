@@ -1,0 +1,15 @@
+{
+  "description": "UrlValidator subclass enforcing a configurable domain denylist via the checkHost extension point",
+  "ops": [
+    {
+      "op": "create",
+      "path": "src/main/java/com/example/shortener/core/DenylistUrlValidator.java",
+      "contentFile": "DenylistUrlValidator.java"
+    },
+    {
+      "op": "create",
+      "path": "src/test/java/com/example/shortener/core/DenylistUrlValidatorTest.java",
+      "contentFile": "DenylistUrlValidatorTest.java"
+    }
+  ]
+}

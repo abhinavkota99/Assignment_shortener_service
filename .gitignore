@@ -1,0 +1,15 @@
+# build output
+build/
+.gradle/
+*.class
+# local offline jar cache used only for air-gapped builds (-PofflineLibs=libs)
+/libs/
+# runtime data and orchestrator run state
+/data/
+shortener-service/data/
+/runs/
+*.jsonl.tmp
+# IDE
+.idea/
+*.iml
+.vscode/

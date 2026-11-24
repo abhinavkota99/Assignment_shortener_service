@@ -1,0 +1,31 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+      - name: Build and test (service + orchestrator, includes end-to-end scenario runs)
+        run: ./gradlew build
+      - name: Run the three scenarios through the CLI
+        run: |
+          ./agentic run scenarios/greenfield --approvals scenarios/greenfield/approvals.json --run-id ci-greenfield
+          ./agentic run scenarios/brownfield --approvals scenarios/brownfield/approvals.json --run-id ci-brownfield
+          ./agentic run scenarios/ambiguous --run-id ci-ambiguous || test $? -eq 3   # pauses for clarification
+          ./agentic resume ci-ambiguous --answers scenarios/ambiguous/answers.json --approvals scenarios/ambiguous/approvals.json
+          for r in ci-greenfield ci-brownfield ci-ambiguous; do ./agentic verify-audit "$r"; done
+          ./agentic metrics
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: run-reports
+          path: runs/*/REPORT.md

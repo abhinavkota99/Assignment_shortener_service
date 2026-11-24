@@ -1,0 +1,7 @@
+{
+  "id": "brownfield-link-expiration",
+  "title": "Brownfield: add link expiration to the existing service",
+  "type": "brownfield",
+  "baseline": "shortener-service",
+  "requirement": "Marketing wants campaign links that expire. When creating a short link, clients may set an optional expiry time. After that time the short link must stop redirecting and return 410 Gone, while its metadata and click analytics remain available. Links created without an expiry keep working forever, and the redirect path has to stay as fast as it is today."
+}

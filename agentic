@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# Builds (incrementally) and runs the agentic SDLC orchestrator CLI from the repository root.
+# Extra Gradle flags can be passed via AGENTIC_GRADLE_ARGS (e.g. "--offline -PofflineLibs=libs").
+set -euo pipefail
+cd "$(dirname "$0")"
+if [[ -x ./gradlew ]]; then GRADLE=./gradlew; else GRADLE=gradle; fi
+# shellcheck disable=SC2086
+"$GRADLE" -q ${AGENTIC_GRADLE_ARGS:-} :orchestrator:installDist
+exec orchestrator/build/install/agentic/bin/agentic "$@"

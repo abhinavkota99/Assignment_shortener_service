@@ -1,0 +1,20 @@
+plugins {
+    id 'application'
+}
+
+description = 'URL shortener HTTP service (JDK HTTP server, journal-backed persistence)'
+
+dependencies {
+    implementation libs.jackson
+    testImplementation libs.junit
+}
+
+application {
+    mainClass = 'com.example.shortener.ShortenerApplication'
+    // one structured (JSON) log line per event
+    applicationDefaultJvmArgs = ['-Djava.util.logging.SimpleFormatter.format=%5$s%6$s%n']
+}
+
+jar {
+    manifest { attributes 'Main-Class': application.mainClass }
+}
