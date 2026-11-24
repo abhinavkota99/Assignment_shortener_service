@@ -8,7 +8,7 @@ The repository contains two things:
 
 | Module | What it is |
 |---|---|
-| [`shortener-service/`](shortener-service) | The product: a production-style URL shortener on **Spring Boot 4.0 (Spring Framework 7, Java 17)**. It has a REST API for create/redirect/metadata/analytics, idempotent creates, CSPRNG codes, URL abuse validation, a per-client rate-limit interceptor, crash-safe journal persistence (Jackson 3), Actuator liveness/readiness probes with a storage health check, Micrometer metrics, structured ECS JSON logs and 49 tests (JUnit 5, MockMvc, full-context). |
+| [`shortener-service/`](shortener-service) | The product: a production-style URL shortener on **Spring Boot 4.0 (Spring Framework 7, Java 17)**. It has a REST API for create/redirect/metadata/analytics, idempotent creates, CSPRNG codes, URL abuse validation, a per-client rate-limit interceptor, crash-safe journal persistence (Jackson 3), Actuator liveness/readiness probes with a storage health check, Micrometer metrics, structured ECS JSON logs and 50 tests (JUnit 5, MockMvc, full-context). |
 | [`orchestrator/`](orchestrator) | The agentic layer. It runs a DAG of SDLC stages: requirements, codebase analysis, planning, design, parallel implementation, parallel verification and docs, release readiness, and an approved release. It has entry/exit gates, bounded retries, fallback agents, rollback, safe-stop, policy guardrails, human checkpoints, decision lineage, a hash-chained audit trail, reliability metrics, and re-planning when upstream outputs change. |
 
 The orchestrator has three scenarios:
@@ -28,7 +28,7 @@ Two optional hardening features are both off by default, so the default build an
 Prerequisites: **JDK 17+** (`JAVA_HOME` set) and **git**. The Gradle wrapper downloads Gradle, and the first build downloads Spring Boot from Maven Central.
 
 ```bash
-./gradlew build                      # both modules, 107 tests (includes all 3 scenarios end to end)
+./gradlew build                      # both modules, 111 tests (includes all 3 scenarios end to end)
 
 # Greenfield: build the service from an empty workspace (approvals recorded in a file)
 ./agentic run scenarios/greenfield --approvals scenarios/greenfield/approvals.json
@@ -152,12 +152,12 @@ agentic                  CLI launcher (builds incrementally, then runs)
 
 `./gradlew build` runs 96 tests:
 
-- **49 service tests** (JUnit 5):
+- **50 service tests** (JUnit 5):
   - unit tests for validation, codes, service rules (including 32 concurrent idempotent requests), rate limiter and journal recovery;
   - **MockMvc** tests of the HTTP contract: status codes, headers, every error mapping;
   - a **full Spring Boot context** on a random port: create → redirect → restart → stats, Actuator probes and metrics.
-- **58 orchestrator tests**, made up of:
-  - **40 unit tests:** graph, policy, audit tampering, workspace atomicity/undo/binary handling, approval gateway, LLM output validation, model-written change sets (scope, retry feedback, policy blocking, mandatory review), Docker sandbox commands, Gradle report parsing.
+- **61 orchestrator tests**, made up of:
+  - **43 unit tests:** graph, policy, audit tampering, workspace atomicity/undo/binary handling, approval gateway, LLM output validation, model-written change sets (scope, retry feedback, policy blocking, mandatory review), LLM HTTP error handling (rejected vs retryable), Docker sandbox commands, Gradle report parsing.
   - **13 engine tests with stub agents:** parallel join, retry, bounded retry, fallback, rollback, safe-stop, approval pause/resume, rejection, re-planning, crash recovery, kill switch.
   - **5 end-to-end runs** of the real scenarios. Each has the agents generate a Spring Boot workspace and **build and test it with Gradle** in an isolated copy. This also detects drift: if the service code changes so that a reviewed recipe no longer applies, the build fails.
 

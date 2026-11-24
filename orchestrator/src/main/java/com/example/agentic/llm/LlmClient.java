@@ -16,4 +16,17 @@ public interface LlmClient {
     }
 
     String model();
+
+    /**
+     * The API refused the request and repeating it will not help (bad request, no credit, unknown model,
+     * invalid key). Agents treat it as a permanent failure; transport errors, rate limits and server
+     * overload are {@link java.io.IOException}s and are retried.
+     */
+    final class RejectedException extends Exception {
+        private static final long serialVersionUID = 1L;
+
+        public RejectedException(String message) {
+            super(message);
+        }
+    }
 }

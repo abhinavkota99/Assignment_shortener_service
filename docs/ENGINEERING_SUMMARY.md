@@ -89,13 +89,13 @@ The order of work was:
 ## 5. Validation approach
 
 * **Static:** both modules compile with lint warnings enabled (`-Werror` for the orchestrator). Generated workspaces are built with the same Gradle and Spring Boot versions as the reference service.
-* **Service:** 49 tests (JUnit 5).
+* **Service:** 50 tests (JUnit 5).
   * Unit tests: validation edge cases including IDN, IPv6 unique-local, metadata IP and redirect loops; code generation; idempotency under 32 concurrent threads; collision retry and its bound; analytics windows; rate limiter refill and eviction.
   * MockMvc contract tests: status codes, headers, every error mapping (400/404/405/409/413/415/429), request-id handling.
   * Journal: restart, torn tail, corruption, future format version (Jackson 3).
   * Full Spring Boot context on a random port: create, redirect, restart with data intact, Actuator liveness/readiness, metrics, uniform errors.
-* **Orchestrator:** 58 tests.
-  * Pure components (40): graph cycles and re-expansion; policy rules; audit tamper detection (modify, delete, reorder); workspace atomicity, undo, path escape, OS-metadata and binary-file handling; approval gateway separation of duties; LLM output validation; model-written change sets (the model sees current code, writes are limited to Java sources, retry with feedback, secrets blocked before writing, the AI-001 review is always raised, transcript recorded); Docker sandbox commands (lock-down flags, network only in the prepare phase, read-only cache in the test phase); Gradle report parsing and credential stripping.
+* **Orchestrator:** 61 tests.
+  * Pure components (43): graph cycles and re-expansion; policy rules; audit tamper detection (modify, delete, reorder); workspace atomicity, undo, path escape, OS-metadata and binary-file handling; approval gateway separation of duties; LLM output validation; model-written change sets (the model sees current code, writes are limited to Java sources, retry with feedback, secrets blocked before writing, the AI-001 review is always raised, transcript recorded); LLM HTTP errors (a rejected request such as "no credit" fails fast with the API's own message; rate limits and overload are retried); Docker sandbox commands (lock-down flags, network only in the prepare phase, read-only cache in the test phase); Gradle report parsing and credential stripping.
   * Engine with stub agents (13 tests): prove that branches run *concurrently* (a barrier that only releases if both run), and cover retry/bounded retry, fallback, rollback, safe-stop, pause/resume, rejection, invalidation, crash recovery and the kill switch.
   * End-to-end (5): all three real scenarios, each generating a Spring Boot workspace and building it with Gradle, plus the LLM seam with fake models (valid output used, invalid output falls back).
 * **Docker sandbox, run for real:** `BuildTestAgent` with `AGENTIC_SANDBOX=docker` built and tested a probe project in two containers. Its tests asserted, from inside the test phase, that the network is unreachable, the dependency cache is read-only and host secrets such as `ANTHROPIC_API_KEY` and proxy variables are not visible. All passed. A compile error was reported with correct workspace-relative paths.
