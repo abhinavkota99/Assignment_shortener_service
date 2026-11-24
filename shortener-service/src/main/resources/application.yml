@@ -38,6 +38,17 @@ management:
         readiness:
           include: readinessState,storage
 
+# API docs for debugging and client integration. Disable in production with
+# SPRINGDOC_API_DOCS_ENABLED=false and SPRINGDOC_SWAGGER_UI_ENABLED=false.
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    operations-sorter: method
+    try-it-out-enabled: true
+  show-actuator: true
+
 logging:
   structured:
     format:

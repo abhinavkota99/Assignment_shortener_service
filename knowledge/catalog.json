@@ -578,7 +578,7 @@
     },
     {
       "id": "T-bootstrap",
-      "title": "Spring wiring, storage health indicator, application and end-to-end test",
+      "title": "Spring wiring, OpenAPI/Swagger UI, storage health indicator, application and end-to-end test",
       "capability": "operability",
       "dependsOn": [
         "T-api",
@@ -587,6 +587,7 @@
       "files": [
         "src/main/java/com/example/shortener/ShortenerApplication.java",
         "src/main/java/com/example/shortener/config/ShortenerConfiguration.java",
+        "src/main/java/com/example/shortener/config/OpenApiConfiguration.java",
         "src/main/java/com/example/shortener/health/StorageHealthIndicator.java",
         "src/test/java/com/example/shortener/ShortenerApplicationTest.java"
       ],
@@ -598,6 +599,7 @@
         "paths": [
           "src/main/java/com/example/shortener/ShortenerApplication.java",
           "src/main/java/com/example/shortener/config/ShortenerConfiguration.java",
+          "src/main/java/com/example/shortener/config/OpenApiConfiguration.java",
           "src/main/java/com/example/shortener/health/StorageHealthIndicator.java",
           "src/test/java/com/example/shortener/ShortenerApplicationTest.java"
         ]

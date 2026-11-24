@@ -92,6 +92,18 @@ class ShortenerApplicationTest {
     }
 
     @Test
+    void openApiDocumentAndSwaggerUiAreServed() throws Exception {
+        start();
+        HttpResponse<String> docs = send(HttpRequest.newBuilder(URI.create(base + "/v3/api-docs")).GET().build());
+        assertEquals(200, docs.statusCode(), docs.body());
+        assertTrue(docs.body().contains("\"openapi\":\"3."), docs.body());
+        assertTrue(docs.body().contains("/api/v1/links/{code}/stats"), docs.body());
+        assertTrue(docs.body().contains("URL Shortener API"), docs.body());
+        HttpResponse<String> ui = send(HttpRequest.newBuilder(URI.create(base + "/swagger-ui/index.html")).GET().build());
+        assertEquals(200, ui.statusCode());
+    }
+
+    @Test
     void errorsUseTheUniformShape() throws Exception {
         start();
         HttpResponse<String> bad = send(HttpRequest.newBuilder(URI.create(base + "/api/v1/links")).header("Content-Type", "application/json")

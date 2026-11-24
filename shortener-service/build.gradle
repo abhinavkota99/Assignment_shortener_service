@@ -21,6 +21,8 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-webmvc'
     implementation 'org.springframework.boot:spring-boot-starter-jackson'
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
+    // OpenAPI 3.1 document at /v3/api-docs and Swagger UI at /swagger-ui.html (springdoc 3.x = Spring Boot 4)
+    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.3'
 
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
